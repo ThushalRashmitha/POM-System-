@@ -12,21 +12,25 @@ const adminRoutes = require('./src/routes/admin');
 const marketplaceRoutes = require('./src/routes/marketplace');
 
 const requiredEnvironment = ['MONGODB_URI', 'JWT_SECRET', 'ADMIN_EMAIL', 'ADMIN_PASSWORD'];
-const missingEnvironment = requiredEnvironment.filter((key) => !process.env[key]);
-
-if (missingEnvironment.length) {
-  console.error(`Missing required environment variables: ${missingEnvironment.join(', ')}`);
-  process.exit(1);
-}
 
 const app = express();
 const publicDirectory = path.join(__dirname, 'public');
+let initializationPromise;
 
 app.disable('x-powered-by');
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json({ limit: '3mb' }));
 app.use(cookieParser());
 app.use(express.static(publicDirectory));
+
+app.use(async (req, res, next) => {
+  try {
+    await initialize();
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 app.use('/api/auth', authRoutes);
@@ -45,14 +49,34 @@ app.use((error, req, res, next) => {
   });
 });
 
+function initialize() {
+  if (!initializationPromise) {
+    initializationPromise = (async () => {
+      const missingEnvironment = requiredEnvironment.filter((key) => !process.env[key]);
+      if (missingEnvironment.length) {
+        throw new Error(`Missing required environment variables: ${missingEnvironment.join(', ')}`);
+      }
+      await connectDatabase();
+      await ensurePlatformAdmin();
+    })().catch((error) => {
+      initializationPromise = null;
+      throw error;
+    });
+  }
+  return initializationPromise;
+}
+
 async function start() {
-  await connectDatabase();
-  await ensurePlatformAdmin();
+  await initialize();
   const port = Number(process.env.PORT) || 3000;
   app.listen(port, () => console.log(`Shop management app listening on port ${port}`));
 }
 
-start().catch((error) => {
-  console.error('Unable to start the server:', error);
-  process.exit(1);
-});
+if (require.main === module) {
+  start().catch((error) => {
+    console.error('Unable to start the server:', error);
+    process.exit(1);
+  });
+}
+
+module.exports = app;

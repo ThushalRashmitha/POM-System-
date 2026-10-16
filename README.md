@@ -36,6 +36,10 @@ The first server start creates the platform administrator from the environment v
 
 For a hosted launch, deploy this Node.js application to a Node-compatible hosting service, set the same environment variables in that service's private environment-variable settings, and point it to the Atlas database. Turn on HTTPS and set `NODE_ENV=production` so browser login cookies are secure. Never put the MongoDB URI, admin password, or JWT secret in the public browser files or send them in chat.
 
+### Deploy on Vercel
+
+Import the Git repository into Vercel with the project root set to this repository. Vercel detects the Express app exported from `server.js`; files in `public/` are served as static assets. In the Vercel project settings, add `MONGODB_URI`, `JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and `NODE_ENV=production` for the Production environment (add them to Preview too if previews need to connect to the database). Ensure MongoDB Atlas allows connections from Vercel, then redeploy. Do not add `.env` to Git or paste secrets into source files.
+
 ## Pages
 
 - `/` — landing page
