@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Platform administration</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body class="app-page">
+  <header class="app-header">
+    <a class="brand" href="/"><span class="brand-mark"><i class="fa-solid fa-store"></i></span> Shop Management <span class="admin-badge">ADMIN</span></a>
+    <div class="header-links"><span class="user-label" id="admin-email"></span><button class="button button-quiet" data-logout>Sign out</button></div>
+  </header>
+  <main class="admin-workspace">
+    <div class="page-heading"><div><span class="eyebrow">PLATFORM CONTROL</span><h1>Shop accounts</h1><p>Manage shop access, payment follow-up and marketplace visibility.</p></div><button class="button button-outline" id="refresh-shops"><i class="fa-solid fa-rotate"></i> Refresh</button></div>
+    <div class="notice notice-info"><i class="fa-solid fa-circle-info"></i> Shops can use their portal after registering. Suspend a shop if its subscription payment is overdue.</div>
+    <div id="admin-message" class="notice hidden" role="status"></div>
+    <div class="content-card"><div class="table-wrap"><table><thead><tr><th>Business</th><th>Account</th><th>Products</th><th>Invoices</th><th>Subscription / payment</th><th>Marketplace</th><th>Actions</th></tr></thead><tbody id="shops-table"></tbody></table></div></div>
+  </main>
+  <div class="toast hidden" id="app-toast" role="status"></div>
+  <script src="/js/api.js"></script>
+  <script src="/js/admin.js"></script>
+</body>
+</html>

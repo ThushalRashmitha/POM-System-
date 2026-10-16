@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Shop portal</title>
+  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="stylesheet" href="/css/shop.css">
+</head>
+<body class="app-page">
+<header class="app-header">
+  <div class="header-links"><a class="button button-outline" href="/marketplace.html" target="_blank">View marketplace <i class="fa-solid fa-arrow-up-right-from-square"></i></a><span class="shop-name-header" id="shop-header-name"></span><span class="user-label" id="shop-email"></span><button class="button button-quiet" data-logout>Sign out</button></div>
+</header>
+<div class="app-layout">
+  <aside class="app-sidebar">
+    <nav class="sidebar-nav" aria-label="Shop navigation">
+        <button class="side-link active" data-panel="dashboard"><i class="fa-solid fa-border-all"></i> Dashboard</button>
+        <button class="side-link" data-panel="new-bill"><i class="fa-solid fa-cart-shopping"></i> New Bill</button>
+        <button class="side-link" data-panel="inventory"><i class="fa-solid fa-box-archive"></i> Inventory</button>
+        <button class="side-link" data-panel="invoices"><i class="fa-solid fa-receipt"></i> Invoices</button>
+        <button class="side-link" data-panel="reports"><i class="fa-solid fa-chart-column"></i> Reports</button>
+      </nav>
+      <div class="sidebar-bottom"><i class="fa-solid fa-lock"></i> Your shop data is private</div>
+    </aside>
+    <main class="workspace">
+      <section class="panel active" id="panel-dashboard">
+        <div class="page-heading"><div><span class="eyebrow">YOUR BUSINESS</span><h1>Dashboard</h1><p id="shop-brand">Sales and stock for your shop.</p></div></div>
+        <div class="stat-grid">
+          <article class="stat-card"><span class="stat-icon violet"><i class="fa-solid fa-receipt"></i></span><div><span>Bills today</span><strong id="stat-bills-today">0</strong></div></article>
+          <article class="stat-card"><span class="stat-icon violet"><i class="fa-solid fa-calendar-days"></i></span><div><span>Bills this month</span><strong id="stat-bills-month">0</strong></div></article>
+          <article class="stat-card"><span class="stat-icon green"><i class="fa-solid fa-money-bill-wave"></i></span><div><span>Today's income</span><strong id="stat-income-today">Rs. 0.00</strong></div></article>
+          <article class="stat-card"><span class="stat-icon green"><i class="fa-solid fa-wallet"></i></span><div><span>Monthly income</span><strong id="stat-income-month">Rs. 0.00</strong></div></article>
+          <article class="stat-card"><span class="stat-icon amber"><i class="fa-solid fa-box"></i></span><div><span>Products</span><strong id="stat-products">0</strong></div></article>
+          <article class="stat-card"><span class="stat-icon rose"><i class="fa-solid fa-triangle-exclamation"></i></span><div><span>Low stock</span><strong id="stat-low-stock">0</strong></div></article>
+        </div>
+        <div class="content-card"><div class="card-heading"><div><h2>Low stock alert</h2><p>Products that need restocking.</p></div><button class="button button-outline" data-open-panel="inventory">Manage inventory</button></div><div class="table-wrap"><table><thead><tr><th>Product</th><th>Current stock</th><th>Price</th></tr></thead><tbody id="low-stock-products"></tbody></table></div></div>
+        <div class="content-card">
+          <div class="card-heading"><div><h2>Products in your shop</h2><p>Current inventory and availability.</p></div><button class="button button-outline" data-open-panel="inventory">Manage products</button></div>
+          <div class="table-wrap"><table><thead><tr><th>Product</th><th>Price</th><th>Stock</th><th>Marketplace</th></tr></thead><tbody id="overview-products"></tbody></table></div>
+        </div>
+      </section>
+      <section class="panel" id="panel-new-bill">
+        <div class="page-heading"><div><span class="eyebrow">POINT OF SALE</span><h1>New bill</h1><p>Select products to add them to the cart, then submit and print the receipt.</p></div></div>
+        <div class="pos-layout">
+          <div class="content-card pos-catalog">
+            <div class="pos-search"><i class="fa-solid fa-magnifying-glass"></i><input id="pos-search" type="search" placeholder="Search products..." aria-label="Search products"></div>
+            <div class="pos-product-grid" id="pos-product-grid"></div>
+          </div>
+          <div class="content-card pos-cart">
+            <div class="card-heading"><div><h2>Current bill</h2><p id="cart-item-count">No items</p></div><button class="button button-quiet button-small" type="button" id="clear-cart">Clear</button></div>
+            <div class="cart-items" id="cart-items"></div>
+            <div class="cart-footer"><div class="cart-total"><span>Total</span><strong id="cart-total">Rs. 0.00</strong></div><button class="button button-primary button-full" type="button" id="submit-bill"><i class="fa-solid fa-receipt"></i> Submit bill & print</button><div id="sale-message" class="notice hidden" role="status"></div></div>
+          </div>
+        </div>
+      </section>
+      <section class="panel" id="panel-inventory">
+        <div class="page-heading"><div><span class="eyebrow">INVENTORY</span><h1>Inventory</h1><p>Manage product details, stock, and marketplace availability.</p></div></div>
+        <div class="content-card">
+          <div class="card-heading"><div><h2 id="product-form-title">Add a product</h2><p>Set its description, price, photo and quantity.</p></div></div>
+          <form id="product-form" class="product-form">
+            <label>Product name<input name="name" required minlength="2" maxlength="160" placeholder="Product name"></label>
+            <label>Description<input name="description" maxlength="2000" placeholder="Details customers should know"></label>
+            <label>Price (Rs.)<input name="price" type="number" min="0" step="0.01" required placeholder="0.00"></label>
+            <label>Available stock<input name="stock" type="number" min="0" step="1" required placeholder="0"></label>
+            <label class="form-wide">Image URL <span class="optional-label">(optional)</span><input name="imageUrl" type="url" placeholder="https://example.com/product.jpg"></label>
+            <label class="form-wide">Or choose an image from your computer <span class="optional-label">(PNG, JPG, or WebP; up to 2 MB)</span><input name="imageFile" type="file" accept="image/png,image/jpeg,image/webp"></label>
+            <div class="form-wide image-preview-wrap hidden" id="product-image-preview-wrap"><img id="product-image-preview" alt="Product image preview"><span id="product-image-file-name"></span></div>
+            <div class="form-actions">
+              <button class="button button-primary" id="product-save-button" type="submit">Add product</button>
+              <button class="button button-quiet hidden" id="product-cancel-edit" type="button">Cancel edit</button>
+            </div>
+          </form>
+          <div id="product-message" class="notice hidden" role="status"></div>
+        </div>
+        <div class="content-card"><div class="card-heading"><div><h2>Inventory</h2></div></div><div class="table-wrap"><table><thead><tr><th>Product</th><th>Price</th><th>Stock</th><th>Marketplace</th><th>Action</th></tr></thead><tbody id="products-table"></tbody></table></div></div>
+      </section>
+      <section class="panel" id="panel-invoices">
+        <div class="page-heading"><div><span class="eyebrow">SALES RECORDS</span><h1>Invoices</h1><p>View, print, export, or delete invoice records.</p></div></div>
+        <div class="content-card">
+          <div class="card-heading report-heading"><div><h2>Sales history</h2><p>Filter invoices by date and manage receipt records.</p></div><div class="invoice-filters"><input type="date" id="date-from" aria-label="From date"><input type="date" id="date-to" aria-label="To date"><button class="button button-quiet button-small" id="clear-invoice-filters">Clear</button><button class="button button-outline button-small" id="export-invoices"><i class="fa-solid fa-download"></i> Export CSV</button></div></div>
+          <div class="table-wrap"><table><thead><tr><th>Invoice</th><th>Date</th><th>Items</th><th>Total</th><th>Actions</th></tr></thead><tbody id="invoices-table"></tbody></table></div>
+        </div>
+      </section>
+      <section class="panel" id="panel-reports">
+        <div class="page-heading"><div><span class="eyebrow">BUSINESS PERFORMANCE</span><h1>Reports</h1><p>Track revenue and see which products sell best.</p></div></div>
+        <div class="report-tabs"><button class="report-tab active" data-report="sales">Sales report</button><button class="report-tab" data-report="products">Product sales</button></div>
+        <section class="report-panel active" id="report-sales">
+          <div class="stat-grid report-stat-grid">
+            <article class="stat-card"><span class="stat-icon green"><i class="fa-solid fa-calendar-day"></i></span><div><span>Today's revenue</span><strong id="report-today">Rs. 0.00</strong></div></article>
+            <article class="stat-card"><span class="stat-icon violet"><i class="fa-solid fa-calendar-days"></i></span><div><span>This month's revenue</span><strong id="report-month">Rs. 0.00</strong></div></article>
+            <article class="stat-card"><span class="stat-icon amber"><i class="fa-solid fa-chart-line"></i></span><div><span>All-time revenue</span><strong id="report-total">Rs. 0.00</strong></div></article>
+          </div>
+        </section>
+        <section class="report-panel" id="report-products">
+          <div class="content-card"><div class="card-heading"><div><h2>Product sales</h2><p>Quantity sold and revenue by product.</p></div></div><div class="table-wrap"><table><thead><tr><th>Product</th><th>Quantity sold</th><th>Revenue</th></tr></thead><tbody id="product-sales-table"></tbody></table></div></div>
+        </section>
+      </section>
+    </main>
+  </div>
+  <dialog class="receipt-dialog" id="receipt-dialog">
+    <div class="receipt-actions"><h2>Invoice receipt</h2><button type="button" class="button button-quiet button-small" id="close-receipt">Close</button></div>
+    <div id="printable-receipt" class="printable-receipt"></div>
+    <div class="receipt-actions receipt-actions-bottom"><button type="button" class="button button-primary" id="print-receipt"><i class="fa-solid fa-print"></i> Print receipt</button></div>
+  </dialog>
+  <div class="toast hidden" id="app-toast" role="status"></div>
+  <script src="/js/api.js"></script>
+  <script src="/js/shop.js"></script>
+</body>
+</html>

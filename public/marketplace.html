@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Marketplace</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body class="market-page">
+  <header class="market-hero">
+    <nav class="market-nav"><a class="brand brand-light" href="/"><span class="brand-mark"><i class="fa-solid fa-store"></i></span> Shop Management</a><a class="button button-glass" href="/login.html">Shop portal</a></nav>
+    <div class="market-title"><span class="eyebrow eyebrow-light">DISCOVER LOCAL SHOPS</span><h1>Find your next favorite.</h1><p>Browse products and check live availability directly from each shop.</p><label class="search-box"><i class="fa-solid fa-magnifying-glass"></i><input id="market-search" type="search" placeholder="Search products..."><button id="search-button" aria-label="Search"><i class="fa-solid fa-arrow-right"></i></button></label></div>
+  </header>
+  <main class="market-content">
+    <div class="market-results-heading"><div><h2>Products</h2><p id="product-count">Loading products…</p></div><span class="live-tag"><i class="fa-solid fa-circle"></i> Live stock</span></div>
+    <div id="market-message" class="notice hidden" role="status"></div>
+    <section id="market-grid" class="market-grid" aria-live="polite"></section>
+  </main>
+  <footer class="site-footer">© 2026 <a href="/">Shop management</a></footer>
+  <dialog id="product-dialog" class="product-dialog"><button class="dialog-close" id="close-dialog" aria-label="Close"><i class="fa-solid fa-xmark"></i></button><div id="product-detail"></div></dialog>
+  <script src="/js/api.js"></script>
+  <script src="/js/marketplace.js"></script>
+</body>
+</html>
