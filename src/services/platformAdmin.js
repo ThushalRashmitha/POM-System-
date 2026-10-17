@@ -1,24 +1,82 @@
-const bcrypt = require('bcryptjs');
-const User = require('../models/User');
+require('dotenv').config();
 
-async function ensurePlatformAdmin() {
-  const email = process.env.ADMIN_EMAIL.toLowerCase().trim();
-  const existingAdmin = await User.findOne({ role: 'platform-admin' });
-  if (existingAdmin) {
-    if (existingAdmin.email !== email) {
-      throw new Error('ADMIN_EMAIL does not match the provisioned platform administrator.');
-    }
-    return;
+const path = require('node:path');
+const express = require('express');
+const cookieParser = require('cookie-parser');
+const helmet = require('helmet');
+const connectDatabase = require('./src/config/database');
+const { ensurePlatformAdmin } = require('./src/services/platformAdmin');
+const authRoutes = require('./src/routes/auth');
+const shopRoutes = require('./src/routes/shop');
+const adminRoutes = require('./src/routes/admin');
+const marketplaceRoutes = require('./src/routes/marketplace');
+
+const requiredEnvironment = ['MONGODB_URI', 'JWT_SECRET', 'ADMIN_EMAIL', 'ADMIN_PASSWORD'];
+
+const app = express();
+const publicDirectory = path.join(__dirname, 'public');
+let initializationPromise;
+
+app.disable('x-powered-by');
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(express.json({ limit: '3mb' }));
+app.use(cookieParser());
+app.use(express.static(publicDirectory));
+
+app.use(async (req, res, next) => {
+  try {
+    await initialize();
+    next();
+  } catch (error) {
+    next(error);
   }
+});
 
-  const passwordHash = await bcrypt.hash(process.env.ADMIN_PASSWORD, 12);
-  await User.create({
-    email,
-    passwordHash,
-    role: 'platform-admin',
-    subscriptionStatus: 'active'
+app.get('/health', (req, res) => res.json({ status: 'ok' }));
+app.use('/api/auth', authRoutes);
+app.use('/api/shop', shopRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/marketplace', marketplaceRoutes);
+
+app.use('/api', (req, res) => res.status(404).json({ error: 'API endpoint not found.' }));
+app.use((error, req, res, next) => {
+  console.error(error.stack || error.message || 'Request failed.');
+  if (res.headersSent) return next(error);
+  const status = error.status || error.statusCode || 500;
+  const clientError = status >= 400 && status < 500;
+  res.status(status).json({
+    error: clientError ? error.message : 'An unexpected server error occurred.'
   });
-  console.log(`Provisioned platform administrator: ${email}`);
+});
+
+function initialize() {
+  if (!initializationPromise) {
+    initializationPromise = (async () => {
+      const missingEnvironment = requiredEnvironment.filter((key) => !process.env[key]);
+      if (missingEnvironment.length) {
+        throw new Error(`Missing required environment variables: ${missingEnvironment.join(', ')}`);
+      }
+      await connectDatabase();
+      await ensurePlatformAdmin();
+    })().catch((error) => {
+      initializationPromise = null;
+      throw error;
+    });
+  }
+  return initializationPromise;
 }
 
-module.exports = { ensurePlatformAdmin };
+async function start() {
+  await initialize();
+  const port = Number(process.env.PORT) || 3000;
+  app.listen(port, () => console.log(`Shop management app listening on port ${port}`));
+}
+
+if (require.main === module) {
+  start().catch((error) => {
+    console.error('Unable to start the server:', error);
+    process.exit(1);
+  });
+}
+
+module.exports = app;

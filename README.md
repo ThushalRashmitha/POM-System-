@@ -38,7 +38,7 @@ For a hosted launch, deploy this Node.js application to a Node-compatible hostin
 
 ### Deploy on Vercel
 
-Import the Git repository into Vercel with the project root set to this repository. Vercel detects the Express app exported from `server.js`; files in `public/` are served as static assets. In the Vercel project settings, add `MONGODB_URI`, `JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and `NODE_ENV=production` for the Production environment (add them to Preview too if previews need to connect to the database). Ensure MongoDB Atlas allows connections from Vercel, then redeploy. Do not add `.env` to Git or paste secrets into source files.
+Import the Git repository into Vercel with the project root set to this repository. The included `vercel.json` routes requests through the Express app exported from `server.js`, which serves the files in `public/` and handles the API endpoints. In the Vercel project settings, add `MONGODB_URI`, `JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and `NODE_ENV=production` for the Production environment (add them to Preview too if previews need to connect to the database). Ensure MongoDB Atlas allows connections from Vercel, then redeploy. Do not add `.env` to Git or paste secrets into source files.
 
 ## Pages
 
