@@ -16,12 +16,4 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
-function getFirebaseApp() {
-  return admin.app();
-}
-
-// Support both function calls `getFirebaseApp()` and object destructuring `{ db }`
-getFirebaseApp.db = db;
-getFirebaseApp.admin = admin;
-
-module.exports = getFirebaseApp;
+module.exports = { admin, db };
