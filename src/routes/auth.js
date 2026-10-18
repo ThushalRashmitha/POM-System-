@@ -59,8 +59,18 @@ router.post('/register', authLimiter, async (req, res, next) => {
     }
 
     const codeData = codeDoc.data();
+    
+    // Check if already used
     if (codeData.isUsed) {
       return res.status(400).json({ error: 'This Access Code has already been used.' });
+    }
+
+    // Check if expired
+    if (codeData.expiresAt) {
+      const expiryDate = codeData.expiresAt.toDate();
+      if (new Date() > expiryDate) {
+        return res.status(400).json({ error: 'This Access Code has expired.' });
+      }
     }
 
     // 2. Create User
