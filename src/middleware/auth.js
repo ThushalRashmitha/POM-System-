@@ -1,187 +1,52 @@
-const express = require('express');
-
-const bcrypt = require('bcryptjs');
-
-const rateLimit = require('express-rate-limit');
-
+const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
-const { clearSessionCookie, requireUser, setSessionCookie } = require('../middleware/auth');
-
-
-
-const router = express.Router();
-
-const authLimiter = rateLimit({
-
-windowMs: 15 * 60 * 1000,
-
-limit: 10,
-
-standardHeaders: 'draft-7',
-
-legacyHeaders: false,
-
-message: { error: 'Too many authentication attempts. Please try again later.' }
-
-});
-
-
-
-function publicUser(user) {
-
-return {
-
-id: user.id,
-
-businessName: user.businessName,
-
-email: user.email,
-
-whatsapp: user.whatsapp,
-
-role: user.role,
-
-subscriptionStatus: user.subscriptionStatus,
-
-marketplaceEnabled: user.marketplaceEnabled
-
+const cookieOptions = {
+  httpOnly: true,
+  sameSite: 'lax',
+  secure: process.env.NODE_ENV === 'production',
+  path: '/'
 };
 
+function setSessionCookie(res, userId) {
+  const token = jwt.sign({ sub: userId }, process.env.JWT_SECRET, { expiresIn: '7d' });
+  res.cookie('pos_session', token, { ...cookieOptions, maxAge: 7 * 24 * 60 * 60 * 1000 });
 }
 
-
-
-router.post('/register', authLimiter, async (req, res, next) => {
-
-try {
-
-const businessName = String(req.body.businessName || '').trim();
-
-const email = String(req.body.email || '').trim().toLowerCase();
-
-const password = String(req.body.password || '');
-
-const whatsapp = String(req.body.whatsapp || '').replace(/[^\d]/g, '');
-
-
-
-if (businessName.length < 2 || businessName.length > 120) {
-
-return res.status(400).json({ error: 'Business name must be between 2 and 120 characters.' });
-
+function clearSessionCookie(res) {
+  res.clearCookie('pos_session', cookieOptions);
 }
 
-if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+async function requireUser(req, res, next) {
+  const token = req.cookies.pos_session;
+  if (!token) return res.status(401).json({ error: 'Please sign in to continue.' });
 
-return res.status(400).json({ error: 'Enter a valid email address.' });
-
+  try {
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(payload.sub);
+    if (!user) return res.status(401).json({ error: 'Your account is no longer available.' });
+    if (user.role === 'shop' && user.subscriptionStatus !== 'active') {
+      clearSessionCookie(res);
+      return res.status(403).json({ error: 'This shop account is suspended. Contact the platform administrator.' });
+    }
+    req.user = user;
+    return next();
+  } catch (error) {
+    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+      clearSessionCookie(res);
+      return res.status(401).json({ error: 'Your session has expired. Please sign in again.' });
+    }
+    return next(error);
+  }
 }
 
-if (password.length < 10 || password.length > 128) {
-
-return res.status(400).json({ error: 'Password must be between 10 and 128 characters.' });
-
+function requireRole(role) {
+  return (req, res, next) => {
+    if (!req.user || req.user.role !== role) {
+      return res.status(403).json({ error: 'You do not have permission to perform this action.' });
+    }
+    return next();
+  };
 }
 
-if (whatsapp.length < 8 || whatsapp.length > 15) {
-
-return res.status(400).json({ error: 'Enter a WhatsApp number including its country code.' });
-
-}
-
-const passwordHash = await bcrypt.hash(password, 12);
-
-const user = await User.createUser({
-
-businessName,
-
-email,
-
-passwordHash,
-
-whatsapp,
-
-role: 'shop',
-
-subscriptionStatus: 'active'
-
-});
-
-
-
-setSessionCookie(res, user.id);
-
-return res.status(201).json({
-
-message: 'Shop registered. Your portal is ready.',
-
-user: publicUser(user)
-
-});
-
-} catch (error) {
-
-if (error.code === 'EMAIL_EXISTS') return res.status(409).json({ error: error.message });
-
-return next(error);
-
-}
-
-});
-
-
-
-router.post('/login', authLimiter, async (req, res, next) => {
-
-try {
-
-const email = String(req.body.email || '').trim().toLowerCase();
-
-const password = String(req.body.password || '');
-
-const user = await User.findByEmail(email);
-
-if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
-
-return res.status(401).json({ error: 'Invalid email or password.' });
-
-}
-
-if (user.role === 'shop' && user.subscriptionStatus !== 'active') {
-
-return res.status(403).json({ error: 'Your shop is awaiting payment approval or has been suspended. Contact the administrator.' });
-
-}
-
-
-
-setSessionCookie(res, user.id);
-
-return res.json({ user: publicUser(user) });
-
-} catch (error) {
-
-return next(error);
-
-}
-
-});
-
-
-
-router.post('/logout', (req, res) => {
-
-clearSessionCookie(res);
-
-res.json({ message: 'Signed out.' });
-
-});
-
-
-
-router.get('/me', requireUser, (req, res) => res.json({ user: publicUser(req.user) }));
-
-
-
-module.exports = router;
+module.exports = { clearSessionCookie, requireRole, requireUser, setSessionCookie };
