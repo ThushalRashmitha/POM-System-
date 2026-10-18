@@ -1,4 +1,5 @@
 const { cert, getApps, initializeApp } = require('firebase-admin/app');
+const { getFirestore } = require('firebase-admin/firestore');
 
 function getFirebaseApp() {
   const existingApp = getApps()[0];
@@ -25,4 +26,7 @@ function getFirebaseApp() {
   });
 }
 
-module.exports = getFirebaseApp;
+const app = getFirebaseApp();
+const db = getFirestore(app);
+
+module.exports = { app, db };
