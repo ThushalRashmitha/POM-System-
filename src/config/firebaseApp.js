@@ -16,7 +16,7 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
-// මෙයින් අනෙකුත් සියලුම ෆයිල් වල errors මඟ හැරේ (const db මෙන්ම const { db } යන දෙකම වැඩ කරයි)
+// Support both `const db = require(...)` and `const { db } = require(...)`
 db.db = db;
 db.admin = admin;
 
