@@ -1,19 +1,55 @@
-const admin = require('firebase-admin');
+const { cert, getApps, initializeApp } = require('firebase-admin/app');
 
-if (!admin.apps.length) {
-  const privateKey = process.env.FIREBASE_PRIVATE_KEY 
-    ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n') 
-    : undefined;
 
-  admin.initializeApp({
-    credential: admin.credential.cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: privateKey
-    })
-  });
+
+function getFirebaseApp() {
+
+const existingApp = getApps()[0];
+
+if (existingApp) return existingApp;
+
+
+
+const projectId = process.env.FIREBASE_PROJECT_ID;
+
+const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+
+const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+
+const missing = [
+
+['FIREBASE_PROJECT_ID', projectId],
+
+['FIREBASE_CLIENT_EMAIL', clientEmail],
+
+['FIREBASE_PRIVATE_KEY', privateKey]
+
+].filter(([, value]) => !value).map(([name]) => name);
+
+
+
+if (missing.length) {
+
+throw new Error(`Missing required Firebase environment variables: ${missing.join(', ')}`);
+
 }
 
-const db = admin.firestore();
 
-module.exports = { admin, db };
+
+return initializeApp({
+
+credential: cert({ projectId, clientEmail, privateKey }),
+
+...(process.env.FIREBASE_STORAGE_BUCKET
+
+? { storageBucket: process.env.FIREBASE_STORAGE_BUCKET }
+
+: {})
+
+});
+
+}
+
+
+
+module.exports = getFirebaseApp;
