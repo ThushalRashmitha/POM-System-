@@ -42,6 +42,7 @@
       const result = await POS.api('/auth/register', {
         method: 'POST',
         body: JSON.stringify({
+          accessCode: form.get('accessCode'), // Access Code එක මෙතනින් එකතු කරන ලදී
           businessName: form.get('businessName'),
           whatsapp: form.get('whatsapp'),
           email: form.get('email'),

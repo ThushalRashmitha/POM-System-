@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const rateLimit = require('express-rate-limit');
 const User = require('../models/User');
+const { db } = require('../config/firebaseApp');
 const { clearSessionCookie, requireUser, setSessionCookie } = require('../middleware/auth');
 
 const router = express.Router();
@@ -27,11 +28,15 @@ function publicUser(user) {
 
 router.post('/register', authLimiter, async (req, res, next) => {
   try {
+    const accessCode = String(req.body.accessCode || '').trim();
     const businessName = String(req.body.businessName || '').trim();
     const email = String(req.body.email || '').trim().toLowerCase();
     const password = String(req.body.password || '');
     const whatsapp = String(req.body.whatsapp || '').replace(/[^\d]/g, '');
 
+    if (!accessCode) {
+      return res.status(400).json({ error: 'Access code is required to register.' });
+    }
     if (businessName.length < 2 || businessName.length > 120) {
       return res.status(400).json({ error: 'Business name must be between 2 and 120 characters.' });
     }
@@ -44,6 +49,21 @@ router.post('/register', authLimiter, async (req, res, next) => {
     if (whatsapp.length < 8 || whatsapp.length > 15) {
       return res.status(400).json({ error: 'Enter a WhatsApp number including its country code.' });
     }
+
+    // 1. Check Access Code in Firestore collection 'access_codes'
+    const codeRef = db.collection('access_codes').doc(accessCode);
+    const codeDoc = await codeRef.get();
+
+    if (!codeDoc.exists) {
+      return res.status(400).json({ error: 'Invalid Access Code. Please contact admin.' });
+    }
+
+    const codeData = codeDoc.data();
+    if (codeData.isUsed) {
+      return res.status(400).json({ error: 'This Access Code has already been used.' });
+    }
+
+    // 2. Create User
     const passwordHash = await bcrypt.hash(password, 12);
     const user = await User.createUser({
       businessName,
@@ -52,6 +72,13 @@ router.post('/register', authLimiter, async (req, res, next) => {
       whatsapp,
       role: 'shop',
       subscriptionStatus: 'active'
+    });
+
+    // 3. Mark the Access Code as used
+    await codeRef.update({
+      isUsed: true,
+      usedByEmail: email,
+      usedAt: new Date()
     });
 
     setSessionCookie(res, user.id);
