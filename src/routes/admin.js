@@ -1,5 +1,4 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const User = require('../models/User');
 const Product = require('../models/Product');
 const Invoice = require('../models/Invoice');
@@ -10,21 +9,15 @@ router.use(requireUser, requireRole('platform-admin'));
 
 router.get('/shops', async (req, res, next) => {
   try {
-    const shops = await User.find({ role: 'shop' }).select('-passwordHash').sort({ createdAt: -1 }).lean();
-    const shopIds = shops.map((shop) => shop._id);
-    const [productCounts, invoiceCounts] = await Promise.all([
-      Product.aggregate([{ $match: { shop: { $in: shopIds } } }, { $group: { _id: '$shop', count: { $sum: 1 } } }]),
-      Invoice.aggregate([{ $match: { shop: { $in: shopIds } } }, { $group: { _id: '$shop', count: { $sum: 1 } } }])
-    ]);
-    const productsByShop = new Map(productCounts.map((entry) => [String(entry._id), entry.count]));
-    const invoicesByShop = new Map(invoiceCounts.map((entry) => [String(entry._id), entry.count]));
-    res.json({
-      shops: shops.map((shop) => ({
-        ...shop,
-        productCount: productsByShop.get(String(shop._id)) || 0,
-        invoiceCount: invoicesByShop.get(String(shop._id)) || 0
-      }))
-    });
+    const shops = await User.listShops();
+    const counts = await Promise.all(shops.map(async (shop) => {
+      const [productCount, invoiceCount] = await Promise.all([
+        Product.countByShop(shop.id),
+        Invoice.countByShop(shop.id)
+      ]);
+      return { ...shop, passwordHash: undefined, productCount, invoiceCount };
+    }));
+    res.json({ shops: counts });
   } catch (error) {
     next(error);
   }
@@ -32,6 +25,7 @@ router.get('/shops', async (req, res, next) => {
 
 router.patch('/shops/:id', async (req, res, next) => {
   try {
+    if (!isValidDocumentId(req.params.id)) return res.status(400).json({ error: 'Invalid shop ID.' });
     const updates = {};
     if (Object.hasOwn(req.body, 'subscriptionStatus')) {
       if (!['active', 'suspended'].includes(req.body.subscriptionStatus)) {
@@ -47,31 +41,33 @@ router.patch('/shops/:id', async (req, res, next) => {
     }
     if (!Object.keys(updates).length) return res.status(400).json({ error: 'No valid account updates were provided.' });
 
-    const shop = await User.findOneAndUpdate(
-      { _id: req.params.id, role: 'shop' }, { $set: updates },
-      { new: true, runValidators: true }
-    ).select('-passwordHash');
+    const shop = await User.updateUser(req.params.id, updates, 'shop');
     if (!shop) return res.status(404).json({ error: 'Shop account not found.' });
+    delete shop.passwordHash;
     res.json({ shop });
   } catch (error) {
-    if (error instanceof mongoose.Error.CastError) return res.status(400).json({ error: 'Invalid shop ID.' });
     next(error);
   }
 });
 
 router.delete('/shops/:id', async (req, res, next) => {
   try {
-    const shop = await User.findOneAndDelete({ _id: req.params.id, role: 'shop' });
-    if (!shop) return res.status(404).json({ error: 'Shop account not found.' });
+    if (!isValidDocumentId(req.params.id)) return res.status(400).json({ error: 'Invalid shop ID.' });
+    const shop = await User.findById(req.params.id);
+    if (!shop || shop.role !== 'shop') return res.status(404).json({ error: 'Shop account not found.' });
     await Promise.all([
-      Product.deleteMany({ shop: shop._id }),
-      Invoice.deleteMany({ shop: shop._id })
+      Product.deleteByShop(shop.id),
+      Invoice.deleteByShop(shop.id)
     ]);
+    await User.deleteUser(shop.id, 'shop');
     res.json({ message: 'Shop account, products, and invoices deleted.' });
   } catch (error) {
-    if (error instanceof mongoose.Error.CastError) return res.status(400).json({ error: 'Invalid shop ID.' });
     next(error);
   }
 });
+
+function isValidDocumentId(id) {
+  return typeof id === 'string' && /^[A-Za-z0-9_-]{20}$/.test(id);
+}
 
 module.exports = router;

@@ -1,5 +1,4 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const Product = require('../models/Product');
 const User = require('../models/User');
 
@@ -7,22 +6,23 @@ const router = express.Router();
 
 router.get('/products', async (req, res, next) => {
   try {
-    const search = String(req.query.search || '').trim().slice(0, 100);
-    const shopFilter = {
-      role: 'shop', subscriptionStatus: 'active', marketplaceEnabled: true
-    };
-    const shops = await User.find(shopFilter).select('businessName whatsapp').lean();
-    const shopById = new Map(shops.map((shop) => [String(shop._id), shop]));
-    const query = { shop: { $in: shops.map((shop) => shop._id) }, available: true };
-    if (search) query.name = { $regex: escapeRegex(search), $options: 'i' };
-    const products = await Product.find(query).sort({ createdAt: -1 }).limit(200).lean();
-    res.json({
-      products: products.map((product) => ({
+    const search = String(req.query.search || '').trim().slice(0, 100).toLowerCase();
+    const shops = (await User.listShops()).filter((shop) =>
+      shop.subscriptionStatus === 'active' && shop.marketplaceEnabled
+    );
+    const shopById = new Map(shops.map((shop) => [shop.id, {
+      businessName: shop.businessName,
+      whatsapp: shop.whatsapp
+    }]));
+    const products = (await Product.listAvailable())
+      .filter((product) => shopById.has(product.shop) && (!search || product.name.toLowerCase().includes(search)))
+      .slice(0, 200)
+      .map((product) => ({
         ...product,
-        shop: shopById.get(String(product.shop)),
+        shop: shopById.get(product.shop),
         inStock: product.stock > 0
-      }))
-    });
+      }));
+    res.json({ products });
   } catch (error) {
     next(error);
   }
@@ -30,25 +30,29 @@ router.get('/products', async (req, res, next) => {
 
 router.get('/products/:id', async (req, res, next) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) {
-      return res.status(400).json({ error: 'Invalid product ID.' });
+    if (!isValidDocumentId(req.params.id)) return res.status(400).json({ error: 'Invalid product ID.' });
+    const product = await Product.findById(req.params.id);
+    if (!product || !product.available) {
+      return res.status(404).json({ error: 'This product is not currently available.' });
     }
-    const product = await Product.findOne({
-      _id: req.params.id, available: true
-    }).populate({
-      path: 'shop',
-      match: { role: 'shop', subscriptionStatus: 'active', marketplaceEnabled: true },
-      select: 'businessName whatsapp'
-    }).lean();
-    if (!product || !product.shop) return res.status(404).json({ error: 'This product is not currently available.' });
-    res.json({ product: { ...product, inStock: product.stock > 0 } });
+    const shop = await User.findById(product.shop);
+    if (!shop || shop.role !== 'shop' || shop.subscriptionStatus !== 'active' || !shop.marketplaceEnabled) {
+      return res.status(404).json({ error: 'This product is not currently available.' });
+    }
+    res.json({
+      product: {
+        ...product,
+        shop: { businessName: shop.businessName, whatsapp: shop.whatsapp },
+        inStock: product.stock > 0
+      }
+    });
   } catch (error) {
     next(error);
   }
 });
 
-function escapeRegex(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function isValidDocumentId(id) {
+  return typeof id === 'string' && /^[A-Za-z0-9_-]{20}$/.test(id);
 }
 
 module.exports = router;

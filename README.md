@@ -1,6 +1,6 @@
 # Multi-shop POS and Marketplace
 
-A multi-shop point-of-sale and marketplace starter built with Express, MongoDB, and separate browser pages for sign-in, shop management, platform administration, and the customer marketplace.
+A multi-shop point-of-sale and marketplace built with Express and Firebase Cloud Firestore. The server uses the Firebase Admin SDK to access Firestore; browser pages call the app's authenticated Express API and never receive service-account credentials.
 
 ## Project layout
 
@@ -10,50 +10,62 @@ public/
   login.html            Shop registration and sign-in
   shop.html             Private POS, inventory, sales, and reports
   admin.html            Platform administrator portal
-  marketplace.html      Public shop/product marketplace
-  css/styles.css
-  js/                   Browser-side page modules
+  marketplace.html      Customer-facing product listing and details
+  css/
+  js/
 src/
-  config/               MongoDB connection
-  middleware/           Session and role checks
-  models/               Shop, product, and invoice models
+  config/                Firebase Admin and Firestore connection
+  middleware/            Session and role checks
+  models/                Firestore user, product, and invoice access
   routes/                Authentication, shop, admin, marketplace APIs
   services/              Platform administrator provisioning
 server.js
 ```
 
-## Run locally or with MongoDB Atlas
+## Create and configure Firebase
 
-1. Install Node.js 20 or newer, then run `npm install`.
-2. Create a MongoDB database. For a hosted site, create a MongoDB Atlas cluster, a database user, and allow access from your app host's IP address. Copy the application's connection string from Atlas.
-3. Copy `.env.example` to a new, untracked `.env` file and set:
-   - `MONGODB_URI` to your local MongoDB URL or Atlas connection string, including the database name.
-   - `JWT_SECRET` to a long, unique random secret.
-   - `ADMIN_EMAIL` and `ADMIN_PASSWORD` to your platform-administrator login. Use a unique password with at least 10 characters.
-4. Run `npm run dev` and open `http://localhost:3000`. Use `npm start` on a production host.
+1. Create a Firebase project in the Firebase console.
+2. Create a **Cloud Firestore** database in that project.
+3. In Project settings → Service accounts, create a private service-account key. Keep the downloaded JSON private; never commit it or send it in chat.
+4. Copy `.env.example` to `.env`. Fill in the Firebase project ID, the service-account `client_email`, and `private_key`. In `.env`, retain the private key's `\n` sequences inside quotes; the server turns them into line breaks.
+5. Set `JWT_SECRET` to a long random secret and set `ADMIN_EMAIL` and a unique `ADMIN_PASSWORD` (at least 10 characters).
+6. Run `npm install`, then `npm run dev` and open `http://localhost:3000`.
 
-The first server start creates the platform administrator from the environment variables. Keep `.env` private and do not commit it. Shops get immediate portal access when registration succeeds. The platform administrator can suspend access when subscription payment becomes overdue and restore access after resolving it.
+The server creates the platform administrator in the Firestore `users` collection on first start. It also uses a `userEmails` collection to enforce unique account emails. Products and invoices are stored in `products` and `invoices`. The Firestore Admin SDK runs only on the server and bypasses Firestore client security rules; do not expose its service-account key to browser code.
 
-For a hosted launch, deploy this Node.js application to a Node-compatible hosting service, set the same environment variables in that service's private environment-variable settings, and point it to the Atlas database. Turn on HTTPS and set `NODE_ENV=production` so browser login cookies are secure. Never put the MongoDB URI, admin password, or JWT secret in the public browser files or send them in chat.
+Product image URLs can point to an existing HTTP(S) image. To keep uploaded images up to 2 MB without exceeding Firestore's document-size limit, enable Firebase Storage, set `FIREBASE_STORAGE_BUCKET` to the bucket name, and grant the service account permission to create and delete Storage objects. Image uploads need Storage; shops can still use image URLs if Storage is not configured.
 
-### Deploy on Vercel
+## Deploy on Vercel
 
-Import the Git repository into Vercel with the project root set to this repository. The included `vercel.json` routes requests through the Express app exported from `server.js`, which serves the files in `public/` and handles the API endpoints. In the Vercel project settings, add `MONGODB_URI`, `JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and `NODE_ENV=production` for the Production environment (add them to Preview too if previews need to connect to the database). Ensure MongoDB Atlas allows connections from Vercel, then redeploy. Do not add `.env` to Git or paste secrets into source files.
+Import this repository into Vercel with the project root set to the repository root. The included `vercel.json` routes requests to the Express app. In the Vercel project's **Settings → Environment Variables**, add these for **Production** (and Preview if needed):
 
-## Pages
+- `FIREBASE_PROJECT_ID`
+- `FIREBASE_CLIENT_EMAIL`
+- `FIREBASE_PRIVATE_KEY`
+- `FIREBASE_STORAGE_BUCKET` (only required for product image uploads)
+- `JWT_SECRET`
+- `ADMIN_EMAIL`
+- `ADMIN_PASSWORD`
+- `NODE_ENV` set to `production`
+
+Copy the Firebase values from the private service-account JSON: `project_id`, `client_email`, and `private_key`. Preserve newlines in the private-key value (or use `\n` sequences). For uploads, also set the Storage bucket name shown in Firebase Storage settings (often `<project-id>.firebasestorage.app`). Never add the service-account JSON, its key, or `.env` to Git. Redeploy after changing environment variables.
+
+## Data migration note
+
+Changing the app from MongoDB to Firestore does **not** copy existing records. This app now starts with a fresh Firestore database; existing MongoDB users, products, invoices, and hashed passwords remain in MongoDB unless separately exported and imported. Do not delete the old database until you have confirmed whether it contains data you need.
+
+## Pages and features
 
 - `/` — landing page
 - `/login.html` — shop registration/sign-in
-- `/shop.html` — shop POS and inventory portal
-- `/admin.html` — platform account controls
-- `/marketplace.html` — customer-facing product listing and details
+- `/shop.html` — private shop POS and inventory portal
+- `/admin.html` — platform administration
+- `/marketplace.html` — public product marketplace
 
-The marketplace only shows active shops whose marketplace is enabled, and it reads current product stock from MongoDB. Selecting an available item opens its details, shop contact, and stock. The order form opens WhatsApp with the item and customer details prefilled; the customer reviews and sends the message. WhatsApp does not send the message automatically from a normal website link. Fully automatic sending requires separate Meta WhatsApp Business Cloud API onboarding and approved credentials.
+The marketplace lists products from active shops with marketplace visibility enabled. Orders are sent as prefilled WhatsApp messages for the customer to review; a regular website link cannot send them automatically. Inventory, invoices, dashboard metrics, and reports are persisted in Firestore.
 
-In the shop portal, use **New Bill** to search inventory, build a cart, adjust quantities, complete a multi-item sale, and open or print its receipt. The dashboard shows today's and this month's bill counts and income, plus low-stock products. **Invoices** includes date-filtered records with view/print/delete actions and CSV export; **Reports** shows sales totals and product sales summaries. Product management supports adding/editing stock, hiding products from the marketplace, and uploading a PNG, JPG, or WebP product image (up to 2 MB) from the computer, as well as using an image URL. Uploaded images are stored with product data in MongoDB. Customer WhatsApp messages are order requests; staff should confirm the order and stock with the customer.
+Subscription access is controlled by the platform administrator. Shop APIs scope inventory and invoice access to the authenticated shop. The administrator can suspend a shop, hide it from the marketplace, or delete its account and associated Firestore products and invoices.
 
-## Hosting
+## Security
 
-Deploy the Node server to a host that supports persistent Node.js processes and configure the environment variables there. Use MongoDB Atlas (or another hosted MongoDB service) for the database. Configure the host's HTTPS URL and restrict database network access to the hosting provider. Do not put MongoDB credentials or the JWT secret in browser code.
-
-Subscription access is controlled by the administrator, not an automatic payment-gateway integration. New shops can use the portal immediately; an administrator can suspend an unpaid shop, which blocks its next authenticated request and clears its browser session on the next request. Shop product and invoice APIs scope every read and write to the authenticated shop. The platform administrator can hide a shop from the marketplace or delete a shop and its associated inventory and invoice records.
+The server continues to use bcrypt password hashes and signed HTTP-only session cookies. Keep all Firebase credentials, the JWT secret, and admin password in private environment variables. If a service-account key was exposed, revoke it in Google Cloud IAM and create a replacement immediately.

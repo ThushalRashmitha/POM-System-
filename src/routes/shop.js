@@ -1,5 +1,4 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const Product = require('../models/Product');
 const Invoice = require('../models/Invoice');
 const { requireRole, requireUser } = require('../middleware/auth');
@@ -9,8 +8,7 @@ router.use(requireUser, requireRole('shop'));
 
 router.get('/products', async (req, res, next) => {
   try {
-    const products = await Product.find({ shop: req.user.id }).sort({ createdAt: -1 });
-    res.json({ products });
+    res.json({ products: await Product.listByShop(req.user.id) });
   } catch (error) {
     next(error);
   }
@@ -30,13 +28,17 @@ router.post('/products', async (req, res, next) => {
     if (typeof description !== 'string' || description.length > 2000) {
       return res.status(400).json({ error: 'Product description must be 2,000 characters or fewer.' });
     }
-    if (imageUrl && !isValidProductImage(imageUrl)) {
+    if (typeof imageUrl !== 'string' || (imageUrl && !isValidProductImage(imageUrl))) {
       return res.status(400).json({ error: 'Product image must be a valid HTTP or HTTPS URL or a PNG, JPG, or WebP image no larger than 2 MB.' });
     }
 
-    const product = await Product.create({
-      shop: req.user.id, name: name.trim(), description: description.trim(),
-      imageUrl, price, stock
+    const product = await Product.createProduct({
+      shop: req.user.id,
+      name: name.trim(),
+      description: description.trim(),
+      imageUrl,
+      price,
+      stock
     });
     res.status(201).json({ product });
   } catch (error) {
@@ -46,6 +48,7 @@ router.post('/products', async (req, res, next) => {
 
 router.patch('/products/:id', async (req, res, next) => {
   try {
+    if (!isValidDocumentId(req.params.id)) return res.status(400).json({ error: 'Invalid product ID.' });
     const updates = {};
     for (const field of ['name', 'description', 'imageUrl', 'price', 'stock', 'available']) {
       if (Object.hasOwn(req.body, field)) updates[field] = req.body[field];
@@ -66,87 +69,63 @@ router.patch('/products/:id', async (req, res, next) => {
       return res.status(400).json({ error: 'Product description must be 2,000 characters or fewer.' });
     }
     if (Object.hasOwn(updates, 'description')) updates.description = updates.description.trim();
-    if (Object.hasOwn(updates, 'imageUrl') && updates.imageUrl && !isValidProductImage(updates.imageUrl)) {
+    if (Object.hasOwn(updates, 'imageUrl')
+      && (typeof updates.imageUrl !== 'string' || (updates.imageUrl && !isValidProductImage(updates.imageUrl)))) {
       return res.status(400).json({ error: 'Product image must be a valid HTTP or HTTPS URL or a PNG, JPG, or WebP image no larger than 2 MB.' });
     }
     if (Object.hasOwn(updates, 'available') && typeof updates.available !== 'boolean') {
       return res.status(400).json({ error: 'Marketplace availability must be true or false.' });
     }
-    const product = await Product.findOneAndUpdate(
-      { _id: req.params.id, shop: req.user.id }, { $set: updates },
-      { new: true, runValidators: true }
-    );
+    if (!Object.keys(updates).length) return res.status(400).json({ error: 'No product updates were provided.' });
+    const product = await Product.updateOwned(req.params.id, req.user.id, updates);
     if (!product) return res.status(404).json({ error: 'Product not found.' });
     res.json({ product });
   } catch (error) {
-    if (error instanceof mongoose.Error.CastError) return res.status(400).json({ error: 'Invalid product ID.' });
     next(error);
   }
 });
 
 router.delete('/products/:id', async (req, res, next) => {
   try {
-    const product = await Product.findOneAndDelete({ _id: req.params.id, shop: req.user.id });
+    if (!isValidDocumentId(req.params.id)) return res.status(400).json({ error: 'Invalid product ID.' });
+    const product = await Product.deleteOwned(req.params.id, req.user.id);
     if (!product) return res.status(404).json({ error: 'Product not found.' });
     res.json({ message: 'Product deleted.' });
   } catch (error) {
-    if (error instanceof mongoose.Error.CastError) return res.status(400).json({ error: 'Invalid product ID.' });
     next(error);
   }
 });
 
 router.get('/invoices', async (req, res, next) => {
   try {
-    const invoices = await Invoice.find({ shop: req.user.id }).sort({ soldAt: -1 }).limit(500);
-    res.json({ invoices });
+    res.json({ invoices: await Invoice.listByShop(req.user.id) });
   } catch (error) {
     next(error);
   }
 });
 
 router.post('/invoices', async (req, res, next) => {
-  const updatedProducts = [];
   try {
     const items = Array.isArray(req.body.items) ? req.body.items : [];
     if (!items.length || items.length > 100) {
       return res.status(400).json({ error: 'A bill must contain between 1 and 100 items.' });
     }
-
-    const invoiceItems = [];
-    let total = 0;
+    const requestedItems = [];
     for (const item of items) {
       const productId = String(item.productId || '');
       const quantity = Number(item.quantity);
-      if (!mongoose.isValidObjectId(productId) || !Number.isInteger(quantity) || quantity < 1) {
-        throw Object.assign(new Error('Each bill item needs a valid product and whole-number quantity.'), { status: 400 });
+      if (!isValidDocumentId(productId) || !Number.isInteger(quantity) || quantity < 1) {
+        return res.status(400).json({ error: 'Each bill item needs a valid product and whole-number quantity.' });
       }
-      const product = await Product.findOneAndUpdate(
-        { _id: productId, shop: req.user.id, available: true, stock: { $gte: quantity } },
-        { $inc: { stock: -quantity } },
-        { new: true }
-      );
-      if (!product) {
-        throw Object.assign(new Error('A product is unavailable or does not have enough stock. Refresh and try again.'), { status: 409 });
-      }
-      updatedProducts.push({ id: product.id, quantity });
-      const amount = product.price * quantity;
-      total += amount;
-      invoiceItems.push({
-        product: product._id, name: product.name,
-        quantity, unitPrice: product.price, amount
-      });
+      requestedItems.push({ productId, quantity });
     }
-
-    const invoice = await Invoice.create({
-      shop: req.user.id,
-      invoiceNumber: `INV-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      items: invoiceItems, total
-    });
+    const invoice = await Invoice.checkout(
+      req.user.id,
+      requestedItems,
+      `INV-${Date.now()}-${Math.floor(Math.random() * 1000)}`
+    );
     res.status(201).json({ invoice });
   } catch (error) {
-    await Promise.all(updatedProducts.map(({ id, quantity }) =>
-      Product.updateOne({ _id: id, shop: req.user.id }, { $inc: { stock: quantity } })
-    ));
     if (error.status) return res.status(error.status).json({ error: error.message });
     next(error);
   }
@@ -154,11 +133,11 @@ router.post('/invoices', async (req, res, next) => {
 
 router.delete('/invoices/:id', async (req, res, next) => {
   try {
-    const invoice = await Invoice.findOneAndDelete({ _id: req.params.id, shop: req.user.id });
+    if (!isValidDocumentId(req.params.id)) return res.status(400).json({ error: 'Invalid invoice ID.' });
+    const invoice = await Invoice.deleteOwned(req.params.id, req.user.id);
     if (!invoice) return res.status(404).json({ error: 'Report/invoice not found.' });
     res.json({ message: 'Invoice and its report record deleted.' });
   } catch (error) {
-    if (error instanceof mongoose.Error.CastError) return res.status(400).json({ error: 'Invalid invoice ID.' });
     next(error);
   }
 });
@@ -177,6 +156,10 @@ function isValidProductImage(value) {
   if (isValidHttpUrl(value)) return true;
   const match = /^data:image\/(?:png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/.exec(value);
   return Boolean(match && Buffer.from(match[1], 'base64').length <= 2 * 1024 * 1024);
+}
+
+function isValidDocumentId(id) {
+  return typeof id === 'string' && /^[A-Za-z0-9_-]{20}$/.test(id);
 }
 
 module.exports = router;

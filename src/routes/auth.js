@@ -44,12 +44,8 @@ router.post('/register', authLimiter, async (req, res, next) => {
     if (whatsapp.length < 8 || whatsapp.length > 15) {
       return res.status(400).json({ error: 'Enter a WhatsApp number including its country code.' });
     }
-    if (await User.exists({ email })) {
-      return res.status(409).json({ error: 'An account with this email already exists.' });
-    }
-
     const passwordHash = await bcrypt.hash(password, 12);
-    await User.create({
+    const user = await User.createUser({
       businessName,
       email,
       passwordHash,
@@ -58,14 +54,13 @@ router.post('/register', authLimiter, async (req, res, next) => {
       subscriptionStatus: 'active'
     });
 
-    const user = await User.findOne({ email });
     setSessionCookie(res, user.id);
     return res.status(201).json({
       message: 'Shop registered. Your portal is ready.',
       user: publicUser(user)
     });
   } catch (error) {
-    if (error.code === 11000) return res.status(409).json({ error: 'An account with this email already exists.' });
+    if (error.code === 'EMAIL_EXISTS') return res.status(409).json({ error: error.message });
     return next(error);
   }
 });
@@ -74,7 +69,7 @@ router.post('/login', authLimiter, async (req, res, next) => {
   try {
     const email = String(req.body.email || '').trim().toLowerCase();
     const password = String(req.body.password || '');
-    const user = await User.findOne({ email }).select('+passwordHash');
+    const user = await User.findByEmail(email);
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
       return res.status(401).json({ error: 'Invalid email or password.' });
     }

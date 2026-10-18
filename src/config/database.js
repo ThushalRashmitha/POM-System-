@@ -1,30 +1,12 @@
-const mongoose = require('mongoose');
+const { getFirestore } = require('firebase-admin/firestore');
+const getFirebaseApp = require('./firebaseApp');
 
-let connectionPromise;
+let firestore;
 
-mongoose.connection.on('disconnected', () => {
-  connectionPromise = null;
-});
-
-module.exports = async function connectDatabase() {
-  if (mongoose.connection.readyState === 1) return mongoose.connection;
-  if (!process.env.MONGODB_URI) {
-    throw new Error('MONGODB_URI is required to connect to MongoDB.');
+module.exports = function getDatabase() {
+  if (!firestore) {
+    firestore = getFirestore(getFirebaseApp());
+    console.log('Firebase Firestore is ready.');
   }
-
-  if (!connectionPromise) {
-    connectionPromise = mongoose.connect(process.env.MONGODB_URI, {
-      serverSelectionTimeoutMS: 5000
-    })
-      .then(() => {
-        console.log('Connected to MongoDB.');
-        return mongoose.connection;
-      })
-      .catch((error) => {
-        connectionPromise = null;
-        throw error;
-      });
-  }
-
-  return connectionPromise;
+  return firestore;
 };

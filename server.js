@@ -4,14 +4,21 @@ const path = require('node:path');
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
-const connectDatabase = require('./src/config/database');
+const getDatabase = require('./src/config/database');
 const { ensurePlatformAdmin } = require('./src/services/platformAdmin');
 const authRoutes = require('./src/routes/auth');
 const shopRoutes = require('./src/routes/shop');
 const adminRoutes = require('./src/routes/admin');
 const marketplaceRoutes = require('./src/routes/marketplace');
 
-const requiredEnvironment = ['MONGODB_URI', 'JWT_SECRET', 'ADMIN_EMAIL', 'ADMIN_PASSWORD'];
+const requiredEnvironment = [
+  'FIREBASE_PROJECT_ID',
+  'FIREBASE_CLIENT_EMAIL',
+  'FIREBASE_PRIVATE_KEY',
+  'JWT_SECRET',
+  'ADMIN_EMAIL',
+  'ADMIN_PASSWORD'
+];
 
 const app = express();
 const publicDirectory = path.join(__dirname, 'public');
@@ -56,7 +63,7 @@ function initialize() {
       if (missingEnvironment.length) {
         throw new Error(`Missing required environment variables: ${missingEnvironment.join(', ')}`);
       }
-      await connectDatabase();
+      getDatabase();
       await ensurePlatformAdmin();
     })().catch((error) => {
       initializationPromise = null;
