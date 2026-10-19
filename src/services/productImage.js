@@ -26,16 +26,10 @@ async function saveProductImage(shopId, dataUrl) {
   }
 
   configureCloudinary();
-  const result = await new Promise((resolve, reject) => {
-    const upload = cloudinary.uploader.upload_stream({
-      folder: `product-images/${shopId}`,
-      public_id: randomUUID(),
-      resource_type: 'image'
-    }, (error, response) => {
-      if (error) return reject(error);
-      resolve(response);
-    });
-    upload.end(buffer);
+  const result = await cloudinary.uploader.upload(dataUrl, {
+    folder: `product-images/${shopId}`,
+    public_id: randomUUID(),
+    resource_type: 'image'
   });
   if (!result?.secure_url || !result.public_id) {
     throw new Error('Cloudinary did not return the uploaded product image URL and ID.');
