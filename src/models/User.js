@@ -1,7 +1,10 @@
 const getDatabase = require('../config/database');
+const { FieldValue } = require('firebase-admin/firestore');
+const { timingSafeEqual } = require('node:crypto');
 
 const USERS = 'users';
 const EMAILS = 'userEmails';
+const INVITE_CODES = 'invite_codes';
 
 function userFromSnapshot(snapshot) {
   return snapshot.exists ? { _id: snapshot.id, id: snapshot.id, ...snapshot.data() } : null;
@@ -56,6 +59,58 @@ async function createUser(user) {
   return { _id: userRef.id, id: userRef.id, ...record };
 }
 
+async function createShopWithAccessCode(user, accessCode, masterAccessCode) {
+  const db = getDatabase();
+  const normalizedEmail = user.email.trim().toLowerCase();
+  const userRef = db.collection(USERS).doc();
+  const emailRef = db.collection(EMAILS).doc(emailDocumentId(normalizedEmail));
+  const inviteQuery = db.collection(INVITE_CODES)
+    .where('code', '==', accessCode)
+    .where('isUsed', '==', false);
+  const now = new Date().toISOString();
+  const record = {
+    ...user,
+    email: normalizedEmail,
+    marketplaceEnabled: user.marketplaceEnabled ?? user.role === 'shop',
+    createdAt: now,
+    updatedAt: now
+  };
+  await db.runTransaction(async (transaction) => {
+    const inviteSnapshot = await transaction.get(inviteQuery);
+    const existingEmail = await transaction.get(emailRef);
+    if (existingEmail.exists) {
+      throw Object.assign(new Error('An account with this email already exists.'), { code: 'EMAIL_EXISTS' });
+    }
+
+    const invite = inviteSnapshot.docs[0];
+    if (invite) {
+      transaction.update(invite.ref, {
+        isUsed: true,
+        usedBy: userRef.id,
+        usedEmail: normalizedEmail,
+        usedAt: FieldValue.serverTimestamp()
+      });
+    } else {
+      const matchingCodes = await transaction.get(
+        db.collection(INVITE_CODES).where('code', '==', accessCode)
+      );
+      const submittedBytes = Buffer.from(accessCode);
+      const masterBytes = Buffer.from(masterAccessCode || '');
+      const matchesMaster = Boolean(masterAccessCode)
+        && submittedBytes.length === masterBytes.length
+        && timingSafeEqual(submittedBytes, masterBytes);
+      if (!matchingCodes.empty || !matchesMaster) {
+        throw Object.assign(new Error('Invalid or already used Admin Access Code.'), { code: 'INVALID_ACCESS_CODE' });
+      }
+    }
+
+    transaction.create(userRef, record);
+    transaction.create(emailRef, { userId: userRef.id });
+  });
+
+  return { _id: userRef.id, id: userRef.id, ...record };
+}
+
 async function updateUser(id, updates, requiredRole) {
   const db = getDatabase();
   const userRef = db.collection(USERS).doc(String(id));
@@ -84,4 +139,13 @@ async function deleteUser(id, requiredRole) {
   return user;
 }
 
-module.exports = { createUser, deleteUser, findByEmail, findById, findPlatformAdmin, listShops, updateUser };
+module.exports = {
+  createShopWithAccessCode,
+  createUser,
+  deleteUser,
+  findByEmail,
+  findById,
+  findPlatformAdmin,
+  listShops,
+  updateUser
+};

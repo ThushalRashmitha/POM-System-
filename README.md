@@ -28,10 +28,10 @@ server.js
 2. Create a **Cloud Firestore** database in that project.
 3. In Project settings → Service accounts, create a private service-account key. Keep the downloaded JSON private; never commit it or send it in chat.
 4. Copy `.env.example` to `.env`. Fill in the Firebase project ID, the service-account `client_email`, and `private_key`. In `.env`, retain the private key's `\n` sequences inside quotes; the server turns them into line breaks.
-5. Set `JWT_SECRET` to a long random secret, set `ADMIN_EMAIL` and a unique `ADMIN_PASSWORD` (at least 10 characters), and choose a private `ADMIN_ACCESS_CODE` to share only with people authorized to register shops.
+5. Set `JWT_SECRET` to a long random secret, set `ADMIN_EMAIL` and a unique `ADMIN_PASSWORD` (at least 10 characters). Optionally set `ADMIN_ACCESS_CODE` as a private master fallback; otherwise, create individual codes in the Firestore `invite_codes` collection.
 6. Run `npm install`, then `npm run dev` and open `http://localhost:3000`.
 
-The server creates the platform administrator in the Firestore `users` collection on first start. It also uses a `userEmails` collection to enforce unique account emails. Products and invoices are stored in `products` and `invoices`. The Firestore Admin SDK runs only on the server and bypasses Firestore client security rules; do not expose its service-account key to browser code.
+The server creates the platform administrator in the Firestore `users` collection on first start. It also uses a `userEmails` collection to enforce unique account emails. Products, invoices, and registration invite codes are stored in `products`, `invoices`, and `invite_codes`. The Firestore Admin SDK runs only on the server and bypasses Firestore client security rules; do not expose its service-account key to browser code.
 
 Product image URLs can point to an existing HTTP(S) image. To keep uploaded images up to 2 MB without exceeding Firestore's document-size limit, enable Firebase Storage, set `FIREBASE_STORAGE_BUCKET` to the bucket name, and grant the service account permission to create and delete Storage objects. Image uploads need Storage; shops can still use image URLs if Storage is not configured.
 
@@ -46,12 +46,14 @@ Import this repository into Vercel with the project root set to the repository r
 - `JWT_SECRET`
 - `ADMIN_EMAIL`
 - `ADMIN_PASSWORD`
-- `ADMIN_ACCESS_CODE` (required to register a shop; keep private)
+- `ADMIN_ACCESS_CODE` (optional master fallback if a code is not found in Firestore; keep private)
 - `NODE_ENV` set to `production`
 
 Copy the Firebase values from the private service-account JSON: `project_id`, `client_email`, and `private_key`. Preserve newlines in the private-key value (or use `\n` sequences). For uploads, also set the Storage bucket name shown in Firebase Storage settings (often `<project-id>.firebasestorage.app`). Never add the service-account JSON, its key, or `.env` to Git. Redeploy after changing environment variables.
 
-Shop registration requires the exact `ADMIN_ACCESS_CODE` value configured on the server. Requests with a missing or incorrect code are rejected before an account is created.
+Shop registration first checks the Firestore `invite_codes` collection for a matching document with `isUsed: false`. Successful registration marks that code as used and records `usedBy` atomically with creating the account. The optional `ADMIN_ACCESS_CODE` master fallback is accepted only when no Firestore document exists for the submitted code. Invalid or already-used codes are rejected before an account is created.
+
+To create an individual invite code, run `npm run invite:create` (optionally provide an assignee label, for example `npm run invite:create -- "Customer name"`). The generated code is printed once and stored in `invite_codes` with `isUsed: false`, an optional `assignedTo`, and a Firestore timestamp in `createdAt`. Share the generated code securely with its intended customer.
 
 ## Data migration note
 

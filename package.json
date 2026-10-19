@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "check": "node --check server.js && find src public/js -type f -name '*.js' -print0 | xargs -0 -n1 node --check"
+    "invite:create": "node scripts/createInviteCode.js",
+    "check": "node --check server.js && find src public/js scripts -type f -name '*.js' -print0 | xargs -0 -n1 node --check"
   },
   "engines": {
     "node": ">=20"

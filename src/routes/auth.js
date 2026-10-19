@@ -1,6 +1,5 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
-const { timingSafeEqual } = require('node:crypto');
 const rateLimit = require('express-rate-limit');
 const User = require('../models/User');
 const { clearSessionCookie, requireUser, setSessionCookie } = require('../middleware/auth');
@@ -33,14 +32,8 @@ router.post('/register', authLimiter, async (req, res, next) => {
     }
 
     const adminAccessCode = req.body.adminAccessCode;
-    const expectedAccessCode = process.env.ADMIN_ACCESS_CODE;
-    const submittedCode = typeof adminAccessCode === 'string' ? Buffer.from(adminAccessCode) : Buffer.alloc(0);
-    const expectedCode = Buffer.from(expectedAccessCode || '');
-    const accessCodeMatches = Boolean(expectedAccessCode)
-      && submittedCode.length === expectedCode.length
-      && timingSafeEqual(submittedCode, expectedCode);
-    if (!accessCodeMatches) {
-      return res.status(400).json({ error: 'Invalid Admin Access Code.' });
+    if (typeof adminAccessCode !== 'string' || !adminAccessCode.trim()) {
+      return res.status(400).json({ error: 'Admin Access Code is required.' });
     }
 
     const businessName = String(req.body.businessName || '').trim();
@@ -61,14 +54,14 @@ router.post('/register', authLimiter, async (req, res, next) => {
       return res.status(400).json({ error: 'Enter a WhatsApp number including its country code.' });
     }
     const passwordHash = await bcrypt.hash(password, 12);
-    const user = await User.createUser({
+    const user = await User.createShopWithAccessCode({
       businessName,
       email,
       passwordHash,
       whatsapp,
       role: 'shop',
       subscriptionStatus: 'active'
-    });
+    }, adminAccessCode, process.env.ADMIN_ACCESS_CODE);
 
     setSessionCookie(res, user.id);
     return res.status(201).json({
@@ -77,6 +70,7 @@ router.post('/register', authLimiter, async (req, res, next) => {
     });
   } catch (error) {
     if (error.code === 'EMAIL_EXISTS') return res.status(409).json({ error: error.message });
+    if (error.code === 'INVALID_ACCESS_CODE') return res.status(400).json({ error: error.message });
     console.error('Shop registration failed:', error);
     if (res.headersSent) return next(error);
 
