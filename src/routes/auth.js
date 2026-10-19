@@ -28,6 +28,10 @@ function publicUser(user) {
 
 router.post('/register', authLimiter, async (req, res, next) => {
   try {
+    if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+      return res.status(400).json({ error: 'Registration request body must be a JSON object.' });
+    }
+
     const adminAccessCode = req.body.adminAccessCode;
     const expectedAccessCode = process.env.ADMIN_ACCESS_CODE;
     const submittedCode = typeof adminAccessCode === 'string' ? Buffer.from(adminAccessCode) : Buffer.alloc(0);
@@ -73,7 +77,24 @@ router.post('/register', authLimiter, async (req, res, next) => {
     });
   } catch (error) {
     if (error.code === 'EMAIL_EXISTS') return res.status(409).json({ error: error.message });
-    return next(error);
+    console.error('Shop registration failed:', error);
+    if (res.headersSent) return next(error);
+
+    const secrets = [
+      process.env.ADMIN_ACCESS_CODE,
+      process.env.FIREBASE_PRIVATE_KEY,
+      process.env.JWT_SECRET,
+      process.env.ADMIN_PASSWORD
+    ].filter(Boolean);
+    const details = secrets.reduce(
+      (message, secret) => message.replaceAll(secret, '[redacted]'),
+      error instanceof Error ? error.message : String(error)
+    );
+    return res.status(500).json({
+      error: details
+        ? `Shop registration failed: ${details}`
+        : 'Shop registration failed because of an unknown server error.'
+    });
   }
 });
 
