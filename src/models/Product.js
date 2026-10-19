@@ -36,7 +36,7 @@ async function createProduct(product) {
   const now = new Date().toISOString();
   const image = product.imageUrl?.startsWith('data:image/')
     ? await saveProductImage(product.shop, product.imageUrl)
-    : { imageUrl: product.imageUrl || '', imageStoragePath: '' };
+    : { imageUrl: product.imageUrl || '', imagePublicId: '' };
   const record = {
     ...product,
     ...image,
@@ -48,7 +48,7 @@ async function createProduct(product) {
     await ref.create(record);
     return { _id: ref.id, id: ref.id, ...record };
   } catch (error) {
-    if (image.imageStoragePath) await removeProductImage(image.imageStoragePath);
+    if (image.imagePublicId) await removeProductImage(image.imagePublicId);
     throw error;
   }
 }
@@ -57,17 +57,18 @@ async function updateOwned(id, shopId, updates) {
   const ref = getDatabase().collection(PRODUCTS).doc(String(id));
   const snapshot = await ref.get();
   if (!snapshot.exists || snapshot.get('shop') !== String(shopId)) return null;
-  const previousImagePath = snapshot.get('imageStoragePath');
+  const previousImagePublicId = snapshot.get('imagePublicId');
+  const hasImageUpdate = Object.hasOwn(updates, 'imageUrl');
   let imageUpdate = {};
-  if (Object.hasOwn(updates, 'imageUrl')) {
+  if (hasImageUpdate) {
     imageUpdate = updates.imageUrl?.startsWith('data:image/')
       ? await saveProductImage(shopId, updates.imageUrl)
-      : { imageUrl: updates.imageUrl || '', imageStoragePath: '' };
+      : { imageUrl: updates.imageUrl || '', imagePublicId: '' };
     delete updates.imageUrl;
   }
   await ref.update({ ...updates, ...imageUpdate, updatedAt: new Date().toISOString() });
-  if (previousImagePath && previousImagePath !== imageUpdate.imageStoragePath) {
-    await removeProductImage(previousImagePath);
+  if (hasImageUpdate && previousImagePublicId && previousImagePublicId !== imageUpdate.imagePublicId) {
+    await removeProductImage(previousImagePublicId);
   }
   return productFromSnapshot(await ref.get());
 }
@@ -78,16 +79,16 @@ async function deleteOwned(id, shopId) {
   if (!snapshot.exists || snapshot.get('shop') !== String(shopId)) return null;
   const product = productFromSnapshot(snapshot);
   await ref.delete();
-  if (product.imageStoragePath) await removeProductImage(product.imageStoragePath);
+  if (product.imagePublicId) await removeProductImage(product.imagePublicId);
   return product;
 }
 
 async function deleteByShop(shopId) {
   const collection = getDatabase().collection(PRODUCTS);
   const snapshot = await collection.where('shop', '==', String(shopId)).get();
-  const paths = snapshot.docs.map((doc) => doc.get('imageStoragePath')).filter(Boolean);
+  const publicIds = snapshot.docs.map((doc) => doc.get('imagePublicId')).filter(Boolean);
   await deleteQueryInBatches(collection.where('shop', '==', String(shopId)));
-  await Promise.all(paths.map(removeProductImage));
+  await Promise.all(publicIds.map(removeProductImage));
   return snapshot.size;
 }
 

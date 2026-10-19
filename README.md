@@ -33,7 +33,7 @@ server.js
 
 The server creates the platform administrator in the Firestore `users` collection on first start. It also uses a `userEmails` collection to enforce unique account emails. Products, invoices, and registration invite codes are stored in `products`, `invoices`, and `invite_codes`. The Firestore Admin SDK runs only on the server and bypasses Firestore client security rules; do not expose its service-account key to browser code.
 
-Product image URLs can point to an existing HTTP(S) image. To keep uploaded images up to 2 MB without exceeding Firestore's document-size limit, enable Firebase Storage, set `FIREBASE_STORAGE_BUCKET` to the bucket name, and grant the service account permission to create and delete Storage objects. Image uploads need Storage; shops can still use image URLs if Storage is not configured.
+Product image URLs can point to an existing HTTP(S) image. Uploaded PNG, JPG, and WebP images up to 2 MB are stored in Cloudinary, and the returned secure URL is saved in the Firestore product document. Set `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` from your Cloudinary dashboard to enable uploads; shops can still use existing HTTP(S) image URLs.
 
 ## Deploy on Vercel
 
@@ -42,14 +42,16 @@ Import this repository into Vercel with the project root set to the repository r
 - `FIREBASE_PROJECT_ID`
 - `FIREBASE_CLIENT_EMAIL`
 - `FIREBASE_PRIVATE_KEY`
-- `FIREBASE_STORAGE_BUCKET` (only required for product image uploads)
+- `CLOUDINARY_CLOUD_NAME` (required for product image uploads)
+- `CLOUDINARY_API_KEY` (required for product image uploads)
+- `CLOUDINARY_API_SECRET` (required for product image uploads)
 - `JWT_SECRET`
 - `ADMIN_EMAIL`
 - `ADMIN_PASSWORD`
 - `ADMIN_ACCESS_CODE` (optional master fallback if a code is not found in Firestore; keep private)
 - `NODE_ENV` set to `production`
 
-Copy the Firebase values from the private service-account JSON: `project_id`, `client_email`, and `private_key`. Preserve newlines in the private-key value (or use `\n` sequences). For uploads, also set the Storage bucket name shown in Firebase Storage settings (often `<project-id>.firebasestorage.app`). Never add the service-account JSON, its key, or `.env` to Git. Redeploy after changing environment variables.
+Copy the Firebase values from the private service-account JSON: `project_id`, `client_email`, and `private_key`. Preserve newlines in the private-key value (or use `\n` sequences). Copy the Cloudinary credentials from your Cloudinary dashboard. Never add the service-account JSON, its key, Cloudinary API secret, or `.env` to Git. Redeploy after changing environment variables.
 
 Shop registration first checks the Firestore `invite_codes` collection for a matching document with `isUsed: false`. Successful registration marks that code as used and records `usedBy` atomically with creating the account. The optional `ADMIN_ACCESS_CODE` master fallback is accepted only when no Firestore document exists for the submitted code. Invalid or already-used codes are rejected before an account is created.
 

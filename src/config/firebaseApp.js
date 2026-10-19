@@ -37,15 +37,7 @@ throw new Error(`Missing required Firebase environment variables: ${missing.join
 
 
 return initializeApp({
-
-credential: cert({ projectId, clientEmail, privateKey }),
-
-...(process.env.FIREBASE_STORAGE_BUCKET
-
-? { storageBucket: process.env.FIREBASE_STORAGE_BUCKET }
-
-: {})
-
+credential: cert({ projectId, clientEmail, privateKey })
 });
 
 }

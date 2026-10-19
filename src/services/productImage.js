@@ -1,9 +1,21 @@
 const { randomUUID } = require('node:crypto');
-const { getStorage } = require('firebase-admin/storage');
-const getFirebaseApp = require('../config/firebaseApp');
+const { v2: cloudinary } = require('cloudinary');
 
 const imagePattern = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/;
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+
+function configureCloudinary() {
+  const { CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET } = process.env;
+  if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_API_KEY || !CLOUDINARY_API_SECRET) {
+    throw new Error('Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET to enable product image uploads.');
+  }
+  cloudinary.config({
+    cloud_name: CLOUDINARY_CLOUD_NAME,
+    api_key: CLOUDINARY_API_KEY,
+    api_secret: CLOUDINARY_API_SECRET,
+    secure: true
+  });
+}
 
 async function saveProductImage(shopId, dataUrl) {
   const match = imagePattern.exec(dataUrl);
@@ -13,33 +25,28 @@ async function saveProductImage(shopId, dataUrl) {
     throw new Error('Product image must be no larger than 2 MB.');
   }
 
-  const bucketName = process.env.FIREBASE_STORAGE_BUCKET;
-  if (!bucketName) {
-    throw new Error('Set FIREBASE_STORAGE_BUCKET to enable product image uploads, or use an image URL instead.');
-  }
-
-  const extension = match[1] === 'jpeg' ? 'jpg' : match[1];
-  const contentType = `image/${match[1]}`;
-  const objectPath = `product-images/${shopId}/${randomUUID()}.${extension}`;
-  const token = randomUUID();
-  const bucket = getStorage(getFirebaseApp()).bucket(bucketName);
-  await bucket.file(objectPath).save(buffer, {
-    resumable: false,
-    metadata: {
-      contentType,
-      metadata: { firebaseStorageDownloadTokens: token }
-    }
+  configureCloudinary();
+  const result = await new Promise((resolve, reject) => {
+    const upload = cloudinary.uploader.upload_stream({
+      folder: `product-images/${shopId}`,
+      public_id: randomUUID(),
+      resource_type: 'image'
+    }, (error, response) => {
+      if (error) return reject(error);
+      resolve(response);
+    });
+    upload.end(buffer);
   });
-
-  const imageUrl = `https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(bucketName)}/o/${encodeURIComponent(objectPath)}?alt=media&token=${token}`;
-  return { imageUrl, imageStoragePath: objectPath };
+  if (!result?.secure_url || !result.public_id) {
+    throw new Error('Cloudinary did not return the uploaded product image URL and ID.');
+  }
+  return { imageUrl: result.secure_url, imagePublicId: result.public_id };
 }
 
-async function removeProductImage(objectPath) {
-  if (!objectPath) return;
-  const bucketName = process.env.FIREBASE_STORAGE_BUCKET;
-  if (!bucketName) throw new Error('FIREBASE_STORAGE_BUCKET is required to remove a stored product image.');
-  await getStorage(getFirebaseApp()).bucket(bucketName).file(objectPath).delete({ ignoreNotFound: true });
+async function removeProductImage(publicId) {
+  if (!publicId) return;
+  configureCloudinary();
+  await cloudinary.uploader.destroy(publicId, { invalidate: true });
 }
 
 module.exports = { removeProductImage, saveProductImage };
