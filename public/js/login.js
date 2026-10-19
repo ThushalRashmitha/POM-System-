@@ -45,7 +45,8 @@
           businessName: form.get('businessName'),
           whatsapp: form.get('whatsapp'),
           email: form.get('email'),
-          password: form.get('password')
+          password: form.get('password'),
+          adminAccessCode: form.get('adminAccessCode')
         })
       });
       window.location.assign(result.user.role === 'platform-admin' ? '/admin.html' : '/shop.html');

@@ -18,6 +18,14 @@ async function listAvailable() {
   return snapshot.docs.map(productFromSnapshot).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
+async function listAvailableByShop(shopId) {
+  const snapshot = await getDatabase().collection(PRODUCTS)
+    .where('shop', '==', String(shopId))
+    .where('available', '==', true)
+    .get();
+  return snapshot.docs.map(productFromSnapshot).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
 async function findById(id) {
   const snapshot = await getDatabase().collection(PRODUCTS).doc(String(id)).get();
   return productFromSnapshot(snapshot);
@@ -88,4 +96,14 @@ async function countByShop(shopId) {
   return snapshot.data().count;
 }
 
-module.exports = { countByShop, createProduct, deleteByShop, deleteOwned, findById, listAvailable, listByShop, updateOwned };
+module.exports = {
+  countByShop,
+  createProduct,
+  deleteByShop,
+  deleteOwned,
+  findById,
+  listAvailable,
+  listAvailableByShop,
+  listByShop,
+  updateOwned
+};

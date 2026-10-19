@@ -463,8 +463,10 @@
     try {
       const result = await POS.api('/auth/me');
       if (result.user.role !== 'shop') return window.location.assign('/admin.html');
-      document.getElementById('shop-brand').textContent = result.user.businessName;
-      document.getElementById('shop-header-name').textContent = result.user.businessName;
+      const businessName = result.user.businessName || result.user.shopName || 'My Shop';
+      document.getElementById('shop-brand').textContent = businessName;
+      document.getElementById('shop-header-name').textContent = businessName;
+      document.getElementById('shop-sidebar-name').textContent = businessName;
       document.getElementById('shop-email').textContent = result.user.email;
       await refreshData();
     } catch {

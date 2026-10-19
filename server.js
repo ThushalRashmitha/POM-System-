@@ -17,7 +17,8 @@ const requiredEnvironment = [
   'FIREBASE_PRIVATE_KEY',
   'JWT_SECRET',
   'ADMIN_EMAIL',
-  'ADMIN_PASSWORD'
+  'ADMIN_PASSWORD',
+  'ADMIN_ACCESS_CODE'
 ];
 
 const app = express();

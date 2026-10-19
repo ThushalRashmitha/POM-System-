@@ -40,6 +40,11 @@ async function requireUser(req, res, next) {
   }
 }
 
+function optionalUser(req, res, next) {
+  if (!req.cookies.pos_session) return next();
+  return requireUser(req, res, next);
+}
+
 function requireRole(role) {
   return (req, res, next) => {
     if (!req.user || req.user.role !== role) {
@@ -49,4 +54,4 @@ function requireRole(role) {
   };
 }
 
-module.exports = { clearSessionCookie, requireRole, requireUser, setSessionCookie };
+module.exports = { clearSessionCookie, optionalUser, requireRole, requireUser, setSessionCookie };

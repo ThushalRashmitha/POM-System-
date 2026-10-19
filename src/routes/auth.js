@@ -1,5 +1,6 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
+const { timingSafeEqual } = require('node:crypto');
 const rateLimit = require('express-rate-limit');
 const User = require('../models/User');
 const { clearSessionCookie, requireUser, setSessionCookie } = require('../middleware/auth');
@@ -27,6 +28,17 @@ function publicUser(user) {
 
 router.post('/register', authLimiter, async (req, res, next) => {
   try {
+    const adminAccessCode = req.body.adminAccessCode;
+    const expectedAccessCode = process.env.ADMIN_ACCESS_CODE;
+    const submittedCode = typeof adminAccessCode === 'string' ? Buffer.from(adminAccessCode) : Buffer.alloc(0);
+    const expectedCode = Buffer.from(expectedAccessCode || '');
+    const accessCodeMatches = Boolean(expectedAccessCode)
+      && submittedCode.length === expectedCode.length
+      && timingSafeEqual(submittedCode, expectedCode);
+    if (!accessCodeMatches) {
+      return res.status(400).json({ error: 'Invalid Admin Access Code.' });
+    }
+
     const businessName = String(req.body.businessName || '').trim();
     const email = String(req.body.email || '').trim().toLowerCase();
     const password = String(req.body.password || '');

@@ -3,6 +3,8 @@
 .shop-name-header{font-size:13px;font-weight:700;color:#515b6d}
 .app-layout{grid-template-columns:270px minmax(0,1fr);min-height:calc(100vh - 58px)}
 .app-sidebar{padding:16px 18px 22px}
+.app-sidebar>.brand{min-width:0;margin:0 8px 22px}
+.app-sidebar>.brand span:last-child{overflow-wrap:anywhere}
 .sidebar-nav{display:grid;gap:4px}
 .sidebar-nav .side-link{min-height:48px;padding:0 14px;font-size:14px}
 .workspace{max-width:1500px}

@@ -25,6 +25,16 @@
     }).join('');
   }
 
+  async function loadBrandName() {
+    try {
+      const { user } = await POS.api('/auth/me');
+      const businessName = user.businessName || user.shopName || 'My Shop';
+      document.getElementById('market-brand-name').textContent = businessName;
+    } catch (error) {
+      if (error.status !== 401) throw error;
+    }
+  }
+
   async function loadProducts() {
     try {
       const query = search.value.trim();
@@ -111,5 +121,16 @@
     searchTimer = setTimeout(loadProducts, 250);
   });
 
-  loadProducts();
+  async function start() {
+    let brandingError;
+    try {
+      await loadBrandName();
+    } catch (error) {
+      brandingError = error;
+    }
+    await loadProducts();
+    if (brandingError) POS.showNotice(message, brandingError.message, 'error');
+  }
+
+  start();
 })();
