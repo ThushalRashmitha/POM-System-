@@ -4,6 +4,7 @@
   const dialog = document.getElementById('product-dialog');
   const detail = document.getElementById('product-detail');
   const search = document.getElementById('market-search');
+  const shopId = new URLSearchParams(window.location.search).get('shop');
   let searchTimer;
 
   function renderProducts(products) {
@@ -37,9 +38,13 @@
 
   async function loadProducts() {
     try {
+      const params = new URLSearchParams();
       const query = search.value.trim();
-      const endpoint = `/marketplace/products${query ? `?search=${encodeURIComponent(query)}` : ''}`;
-      const { products } = await POS.api(endpoint);
+      if (query) params.set('search', query);
+      if (shopId) params.set('shop', shopId);
+      const suffix = params.size ? `?${params}` : '';
+      const { products, shop } = await POS.api(`/marketplace/products${suffix}`);
+      if (shop) document.getElementById('market-brand-name').textContent = shop.businessName || 'My Shop';
       message.classList.add('hidden');
       renderProducts(products);
     } catch (error) {
@@ -50,7 +55,8 @@
 
   async function openProduct(id) {
     try {
-      const { product } = await POS.api(`/marketplace/products/${encodeURIComponent(id)}`);
+      const shopQuery = shopId ? `?shop=${encodeURIComponent(shopId)}` : '';
+      const { product } = await POS.api(`/marketplace/products/${encodeURIComponent(id)}${shopQuery}`);
       const image = product.imageUrl
         ? `<img class="detail-image" src="${POS.escapeHtml(product.imageUrl)}" alt="${POS.escapeHtml(product.name)}">`
         : '<div class="market-image-placeholder detail-image"><i class="fa-solid fa-box-open"></i></div>';

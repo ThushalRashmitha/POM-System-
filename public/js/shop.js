@@ -468,6 +468,8 @@
       document.getElementById('shop-header-name').textContent = businessName;
       document.getElementById('shop-sidebar-name').textContent = businessName;
       document.getElementById('shop-email').textContent = result.user.email;
+      document.getElementById('marketplace-share-link').href =
+        `/marketplace.html?shop=${encodeURIComponent(result.user.id)}`;
       await refreshData();
     } catch {
       window.location.assign('/login.html');

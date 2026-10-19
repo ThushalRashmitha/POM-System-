@@ -5,6 +5,8 @@
 .app-sidebar{padding:16px 18px 22px}
 .app-sidebar>.brand{min-width:0;margin:0 8px 22px}
 .app-sidebar>.brand span:last-child{overflow-wrap:anywhere}
+.stat-card>div{flex:1;min-width:0}
+.stat-card strong{font-size:clamp(14px,1.25vw,20px);line-height:1.25;white-space:normal;overflow-wrap:anywhere}
 .sidebar-nav{display:grid;gap:4px}
 .sidebar-nav .side-link{min-height:48px;padding:0 14px;font-size:14px}
 .workspace{max-width:1500px}

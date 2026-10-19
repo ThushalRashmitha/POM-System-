@@ -19,6 +19,17 @@
 
   setMode(registering);
 
+  document.querySelectorAll('[data-toggle-password]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const input = button.parentElement.querySelector('input');
+      const showingPassword = input.type === 'password';
+      input.type = showingPassword ? 'text' : 'password';
+      button.setAttribute('aria-label', showingPassword ? 'Hide password' : 'Show password');
+      button.setAttribute('aria-pressed', String(showingPassword));
+      button.innerHTML = `<i class="fa-solid fa-eye${showingPassword ? '-slash' : ''}" aria-hidden="true"></i>`;
+    });
+  });
+
   loginForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     message.classList.add('hidden');

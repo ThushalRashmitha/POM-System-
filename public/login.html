@@ -13,14 +13,14 @@
     <div id="auth-message" class="notice hidden" role="status"></div>
     <form id="login-form" class="form-stack">
       <label>Email address<input name="email" type="email" autocomplete="username" required placeholder="you@yourshop.com"></label>
-      <label>Password<input name="password" type="password" autocomplete="current-password" required minlength="10" placeholder="At least 10 characters"></label>
+      <label>Password<span class="password-field"><input name="password" type="password" autocomplete="current-password" required minlength="10" placeholder="At least 10 characters"><button class="password-toggle" type="button" data-toggle-password aria-label="Show password" aria-pressed="false"><i class="fa-solid fa-eye" aria-hidden="true"></i></button></span></label>
       <button class="button button-primary button-full" type="submit">Sign in <i class="fa-solid fa-arrow-right"></i></button>
     </form>
     <form id="register-form" class="form-stack hidden">
       <label>Business name<input name="businessName" required minlength="2" maxlength="120" placeholder="Your shop name"></label>
       <label>WhatsApp number<input name="whatsapp" type="tel" autocomplete="tel" required placeholder="94771234567"><small>Include the country code; digits only is best.</small></label>
       <label>Email address<input name="email" type="email" autocomplete="email" required placeholder="you@yourshop.com"></label>
-      <label>Password<input name="password" type="password" autocomplete="new-password" minlength="10" maxlength="128" required placeholder="At least 10 characters"></label>
+      <label>Password<span class="password-field"><input name="password" type="password" autocomplete="new-password" minlength="10" maxlength="128" required placeholder="At least 10 characters"><button class="password-toggle" type="button" data-toggle-password aria-label="Show password" aria-pressed="false"><i class="fa-solid fa-eye" aria-hidden="true"></i></button></span></label>
       <label>Admin Access Code<input name="adminAccessCode" type="password" autocomplete="off" required placeholder="Enter your invite code"></label>
       <button class="button button-primary button-full" type="submit">Register shop</button>
       <p class="form-note">You can start using your shop portal as soon as registration is complete. If payment becomes overdue, the platform administrator may suspend access.</p>
