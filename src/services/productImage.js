@@ -4,10 +4,8 @@ const { v2: cloudinary } = require('cloudinary');
 const imagePattern = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/;
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
-// Unsigned upload සඳහා cloud name එක மட்டும் போதுமானது (API secret අවශ්‍ය නැත)
 function getCloudName() {
-  const cloudName = process.env.CLOUDINARY_CLOUD_NAME || 'layrstsz';
-  return cloudName;
+  return process.env.CLOUDINARY_CLOUD_NAME || 'layrstsz';
 }
 
 function normalizeImageSource(source, mimeType) {
@@ -58,11 +56,10 @@ async function saveProductImage(shopId, imageSource, mimeType) {
     throw new Error('Product image must be no larger than 2 MB.');
   }
 
-  // Unsigned upload සඳහා cloudinary.uploader.upload වෙනුවට නිවැරදි preset parameters පාවිච්චි කිරීම
   const cloudName = getCloudName();
   
-  // Node.js backend එකෙන් Cloudinary unsigned upload API එකට közvetlenül fetch request එකක් යැවීම වඩාත් ආරක්ෂිතයි
-  const formData = new URLSearchParams();
+  // URLSearchParams වෙනුවට native FormData පාවිච්චි කිරීමෙන් base64 string එක corrupt වීම වළකයි
+  const formData = new FormData();
   formData.append('file', dataUrl);
   formData.append('upload_preset', 'easl4rum');
   formData.append('folder', `product-images/${shopId}`);
@@ -83,7 +80,6 @@ async function saveProductImage(shopId, imageSource, mimeType) {
 
 async function removeProductImage(publicId) {
   if (!publicId) return;
-  // Delete කිරීමට മാത്രം API secret අවශ්‍ය වේ (configured via cloudinary config)
   const { CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET } = process.env;
   if (CLOUDINARY_CLOUD_NAME && CLOUDINARY_API_KEY && CLOUDINARY_API_SECRET) {
     cloudinary.config({
