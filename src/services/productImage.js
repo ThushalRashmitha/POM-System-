@@ -1,15 +1,18 @@
+const { randomUUID } = require('node:crypto');
 const { v2: cloudinary } = require('cloudinary');
 
 const imagePattern = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/;
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
 function configureCloudinary() {
-  const { CLOUDINARY_CLOUD_NAME } = process.env;
-  if (!CLOUDINARY_CLOUD_NAME) {
-    throw new Error('Set CLOUDINARY_CLOUD_NAME to enable product image uploads.');
+  const { CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET } = process.env;
+  if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_API_KEY || !CLOUDINARY_API_SECRET) {
+    throw new Error('Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET in environment variables.');
   }
   cloudinary.config({
     cloud_name: CLOUDINARY_CLOUD_NAME,
+    api_key: CLOUDINARY_API_KEY,
+    api_secret: CLOUDINARY_API_SECRET,
     secure: true
   });
 }
@@ -64,9 +67,11 @@ async function saveProductImage(shopId, imageSource, mimeType) {
 
   configureCloudinary();
 
-  // Unsigned uploads සඳහා folder සහ public_id ඉවත් කර ඇත (Cloudinary preset මඟින් ඒවා බලාගනී)
+  // Signed Upload Strategy
   const result = await cloudinary.uploader.upload(dataUrl, {
     upload_preset: 'easl4rum',
+    folder: `product-images/${shopId}`,
+    public_id: randomUUID(),
     resource_type: 'image'
   });
 
@@ -79,16 +84,8 @@ async function saveProductImage(shopId, imageSource, mimeType) {
 
 async function removeProductImage(publicId) {
   if (!publicId) return;
-  const { CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET } = process.env;
-  if (CLOUDINARY_CLOUD_NAME && CLOUDINARY_API_KEY && CLOUDINARY_API_SECRET) {
-    cloudinary.config({
-      cloud_name: CLOUDINARY_CLOUD_NAME,
-      api_key: CLOUDINARY_API_KEY,
-      api_secret: CLOUDINARY_API_SECRET,
-      secure: true
-    });
-    await cloudinary.uploader.destroy(publicId, { invalidate: true });
-  }
+  configureCloudinary();
+  await cloudinary.uploader.destroy(publicId, { invalidate: true });
 }
 
 module.exports = { removeProductImage, saveProductImage };
