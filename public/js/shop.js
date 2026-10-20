@@ -197,6 +197,7 @@
       <span>${POS.formatCurrency(item.amount)}</span>
     </div>`).join('');
     document.getElementById('printable-receipt').innerHTML = `
+      <div class="receipt-brand-mark"><i class="fa-solid fa-shop" aria-hidden="true"></i></div>
       <div class="receipt-shop-name">${POS.escapeHtml(shopProfile.businessName)}</div>
       ${shopProfile.whatsapp ? `<div class="receipt-contact">Contact: ${POS.escapeHtml(shopProfile.whatsapp)}</div>` : ''}
       <div class="receipt-subtitle">Sales receipt</div><div class="receipt-rule"></div>

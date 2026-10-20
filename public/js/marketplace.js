@@ -33,7 +33,14 @@
       if (query) params.set('search', query);
       if (shopId) params.set('shop', shopId);
       const suffix = params.size ? `?${params}` : '';
-      const { products } = await POS.api(`/marketplace/products${suffix}`);
+      const { products, shop } = await POS.api(`/marketplace/products${suffix}`);
+      if (shopId) {
+        const businessName = shop?.businessName || products[0]?.shop?.businessName;
+        if (businessName) {
+          document.getElementById('market-brand-name').textContent = businessName;
+          document.title = businessName;
+        }
+      }
       message.classList.add('hidden');
       renderProducts(products);
     } catch (error) {
