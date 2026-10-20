@@ -67,6 +67,7 @@ async function saveProductImage(shopId, imageSource, mimeType) {
 
   configureCloudinary();
   const result = await cloudinary.uploader.upload(dataUrl, {
+    upload_preset: 'easl4rum', // <-- මෙතැනට preset එක එකතු කර ඇත
     folder: `product-images/${shopId}`,
     public_id: randomUUID(),
     resource_type: 'image'
