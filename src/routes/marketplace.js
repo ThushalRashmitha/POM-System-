@@ -1,14 +1,11 @@
 const express = require('express');
 const Product = require('../models/Product');
 const User = require('../models/User');
-const { optionalUser, requireRole } = require('../middleware/auth');
+const { optionalUser } = require('../middleware/auth');
 
 const router = express.Router();
 
-router.use(optionalUser, (req, res, next) => {
-  if (!req.user) return next();
-  return requireRole('shop')(req, res, next);
-});
+router.use(optionalUser);
 
 router.get('/products', async (req, res, next) => {
   try {

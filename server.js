@@ -10,6 +10,7 @@ const authRoutes = require('./src/routes/auth');
 const shopRoutes = require('./src/routes/shop');
 const adminRoutes = require('./src/routes/admin');
 const marketplaceRoutes = require('./src/routes/marketplace');
+const { requirePageRole } = require('./src/middleware/auth');
 
 const requiredEnvironment = [
   'FIREBASE_PROJECT_ID',
@@ -28,6 +29,21 @@ app.disable('x-powered-by');
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json({ limit: '3mb' }));
 app.use(cookieParser());
+
+const publicPages = new Set(['/', '/index.html', '/login.html', '/marketplace.html']);
+const protectedPageRoles = new Map([
+  ['/shop.html', 'shop'],
+  ['/admin.html', 'platform-admin']
+]);
+app.use((req, res, next) => {
+  const pagePath = req.path.toLowerCase();
+  if (!pagePath.endsWith('.html') && pagePath !== '/') return next();
+  if (publicPages.has(pagePath)) return next();
+  const role = protectedPageRoles.get(pagePath);
+  if (!role) return res.redirect('/login.html');
+  return requirePageRole(role)(req, res, next);
+});
+
 app.use(express.static(publicDirectory));
 
 app.use(async (req, res, next) => {
