@@ -1,11 +1,17 @@
-const { randomUUID } = require('node:crypto');
 const { v2: cloudinary } = require('cloudinary');
 
 const imagePattern = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/;
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
-function getCloudName() {
-  return process.env.CLOUDINARY_CLOUD_NAME || 'layrstsz';
+function configureCloudinary() {
+  const { CLOUDINARY_CLOUD_NAME } = process.env;
+  if (!CLOUDINARY_CLOUD_NAME) {
+    throw new Error('Set CLOUDINARY_CLOUD_NAME to enable product image uploads.');
+  }
+  cloudinary.config({
+    cloud_name: CLOUDINARY_CLOUD_NAME,
+    secure: true
+  });
 }
 
 function normalizeImageSource(source, mimeType) {
@@ -56,23 +62,16 @@ async function saveProductImage(shopId, imageSource, mimeType) {
     throw new Error('Product image must be no larger than 2 MB.');
   }
 
-  const cloudName = getCloudName();
-  
-  // URLSearchParams වෙනුවට native FormData පාවිච්චි කිරීමෙන් base64 string එක corrupt වීම වළකයි
-  const formData = new FormData();
-  formData.append('file', dataUrl);
-  formData.append('upload_preset', 'easl4rum');
-  formData.append('folder', `product-images/${shopId}`);
+  configureCloudinary();
 
-  const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
-    method: 'POST',
-    body: formData
+  // Unsigned uploads සඳහා folder සහ public_id ඉවත් කර ඇත (Cloudinary preset මඟින් ඒවා බලාගනී)
+  const result = await cloudinary.uploader.upload(dataUrl, {
+    upload_preset: 'easl4rum',
+    resource_type: 'image'
   });
 
-  const result = await response.json();
-
-  if (!response.ok || !result?.secure_url || !result.public_id) {
-    throw new Error(result.error?.message || 'Cloudinary did not return the uploaded product image URL and ID.');
+  if (!result?.secure_url || !result.public_id) {
+    throw new Error('Cloudinary did not return the uploaded product image URL and ID.');
   }
 
   return { imageUrl: result.secure_url, imagePublicId: result.public_id };
