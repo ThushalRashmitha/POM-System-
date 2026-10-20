@@ -78,6 +78,8 @@
     try {
       const result = await POS.api('/auth/me');
       if (result.user.role !== 'platform-admin') return window.location.assign('/shop.html');
+      document.getElementById('admin-brand-name').textContent =
+        result.user.businessName?.trim() || result.user.shopName?.trim() || 'APEX-R POS System';
       document.getElementById('admin-email').textContent = result.user.email;
       await loadShops();
     } catch {

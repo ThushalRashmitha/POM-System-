@@ -13,6 +13,7 @@
   let editingProductId = null;
   let originalImageUrl = '';
   let toastTimer;
+  let shopProfile = { businessName: 'APEX-R POS System', whatsapp: '' };
 
   document.querySelectorAll('[data-logout]').forEach((button) => button.addEventListener('click', () => {
     POS.signOut().catch((error) => notify(error.message));
@@ -196,7 +197,8 @@
       <span>${POS.formatCurrency(item.amount)}</span>
     </div>`).join('');
     document.getElementById('printable-receipt').innerHTML = `
-      <div class="receipt-shop-name">${POS.escapeHtml(document.getElementById('shop-brand').textContent)}</div>
+      <div class="receipt-shop-name">${POS.escapeHtml(shopProfile.businessName)}</div>
+      ${shopProfile.whatsapp ? `<div class="receipt-contact">Contact: ${POS.escapeHtml(shopProfile.whatsapp)}</div>` : ''}
       <div class="receipt-subtitle">Sales receipt</div><div class="receipt-rule"></div>
       <div class="receipt-meta"><span>Invoice</span><strong>${POS.escapeHtml(invoice.invoiceNumber)}</strong></div>
       <div class="receipt-meta"><span>Date</span><strong>${POS.escapeHtml(POS.formatDate(invoice.soldAt))}</strong></div>
@@ -463,9 +465,14 @@
     try {
       const result = await POS.api('/auth/me');
       if (result.user.role !== 'shop') return window.location.assign('/admin.html');
-      const businessName = result.user.businessName || result.user.shopName || 'My Shop';
+      shopProfile = {
+        businessName: result.user.businessName?.trim() || result.user.shopName?.trim() || 'APEX-R POS System',
+        whatsapp: result.user.whatsapp || ''
+      };
+      const businessName = shopProfile.businessName;
       document.getElementById('shop-brand').textContent = businessName;
       document.getElementById('shop-header-name').textContent = businessName;
+      document.getElementById('shop-sidebar-name').textContent = businessName;
       document.getElementById('shop-email').textContent = result.user.email;
       document.getElementById('marketplace-share-link').href =
         `/marketplace.html?shop=${encodeURIComponent(result.user.id)}`;

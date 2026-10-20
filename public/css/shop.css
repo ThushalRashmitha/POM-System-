@@ -76,6 +76,7 @@
 .receipt-actions-bottom{justify-content:center;margin:17px 0 0}
 .printable-receipt{max-width:340px;margin:auto;padding:22px;background:#fff;color:#151515;font-family:"Courier New",monospace;font-size:12px}
 .receipt-shop-name{text-align:center;text-transform:uppercase;font-weight:700;font-size:16px}
+.receipt-contact{text-align:center;margin-top:4px}
 .receipt-subtitle,.receipt-thanks{text-align:center;color:#555;margin-top:4px}
 .receipt-rule{border-top:1px dashed #555;margin:14px 0}
 .receipt-meta{display:flex;justify-content:space-between;gap:12px;margin:6px 0}
