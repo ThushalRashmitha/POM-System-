@@ -4,17 +4,10 @@ const { v2: cloudinary } = require('cloudinary');
 const imagePattern = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/;
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
-function configureCloudinary() {
-  const { CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET } = process.env;
-  if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_API_KEY || !CLOUDINARY_API_SECRET) {
-    throw new Error('Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET to enable product image uploads.');
-  }
-  cloudinary.config({
-    cloud_name: CLOUDINARY_CLOUD_NAME,
-    api_key: CLOUDINARY_API_KEY,
-    api_secret: CLOUDINARY_API_SECRET,
-    secure: true
-  });
+// Unsigned upload සඳහා cloud name එක மட்டும் போதுமானது (API secret අවශ්‍ය නැත)
+function getCloudName() {
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME || 'layrstsz';
+  return cloudName;
 }
 
 function normalizeImageSource(source, mimeType) {
@@ -65,23 +58,42 @@ async function saveProductImage(shopId, imageSource, mimeType) {
     throw new Error('Product image must be no larger than 2 MB.');
   }
 
-  configureCloudinary();
-  const result = await cloudinary.uploader.upload(dataUrl, {
-    upload_preset: 'easl4rum', // <-- මෙතැනට preset එක එකතු කර ඇත
-    folder: `product-images/${shopId}`,
-    public_id: randomUUID(),
-    resource_type: 'image'
+  // Unsigned upload සඳහා cloudinary.uploader.upload වෙනුවට නිවැරදි preset parameters පාවිච්චි කිරීම
+  const cloudName = getCloudName();
+  
+  // Node.js backend එකෙන් Cloudinary unsigned upload API එකට közvetlenül fetch request එකක් යැවීම වඩාත් ආරක්ෂිතයි
+  const formData = new URLSearchParams();
+  formData.append('file', dataUrl);
+  formData.append('upload_preset', 'easl4rum');
+  formData.append('folder', `product-images/${shopId}`);
+
+  const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+    method: 'POST',
+    body: formData
   });
-  if (!result?.secure_url || !result.public_id) {
-    throw new Error('Cloudinary did not return the uploaded product image URL and ID.');
+
+  const result = await response.json();
+
+  if (!response.ok || !result?.secure_url || !result.public_id) {
+    throw new Error(result.error?.message || 'Cloudinary did not return the uploaded product image URL and ID.');
   }
+
   return { imageUrl: result.secure_url, imagePublicId: result.public_id };
 }
 
 async function removeProductImage(publicId) {
   if (!publicId) return;
-  configureCloudinary();
-  await cloudinary.uploader.destroy(publicId, { invalidate: true });
+  // Delete කිරීමට മാത്രം API secret අවශ්‍ය වේ (configured via cloudinary config)
+  const { CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET } = process.env;
+  if (CLOUDINARY_CLOUD_NAME && CLOUDINARY_API_KEY && CLOUDINARY_API_SECRET) {
+    cloudinary.config({
+      cloud_name: CLOUDINARY_CLOUD_NAME,
+      api_key: CLOUDINARY_API_KEY,
+      api_secret: CLOUDINARY_API_SECRET,
+      secure: true
+    });
+    await cloudinary.uploader.destroy(publicId, { invalidate: true });
+  }
 }
 
 module.exports = { removeProductImage, saveProductImage };
