@@ -26,16 +26,6 @@
     }).join('');
   }
 
-  async function loadBrandName() {
-    try {
-      const { user } = await POS.api('/auth/me');
-      const businessName = user.businessName || user.shopName || 'My Shop';
-      document.getElementById('market-brand-name').textContent = businessName;
-    } catch (error) {
-      if (error.status !== 401) throw error;
-    }
-  }
-
   async function loadProducts() {
     try {
       const params = new URLSearchParams();
@@ -43,8 +33,7 @@
       if (query) params.set('search', query);
       if (shopId) params.set('shop', shopId);
       const suffix = params.size ? `?${params}` : '';
-      const { products, shop } = await POS.api(`/marketplace/products${suffix}`);
-      if (shop) document.getElementById('market-brand-name').textContent = shop.businessName || 'My Shop';
+      const { products } = await POS.api(`/marketplace/products${suffix}`);
       message.classList.add('hidden');
       renderProducts(products);
     } catch (error) {
@@ -128,14 +117,7 @@
   });
 
   async function start() {
-    let brandingError;
-    try {
-      await loadBrandName();
-    } catch (error) {
-      brandingError = error;
-    }
     await loadProducts();
-    if (brandingError) POS.showNotice(message, brandingError.message, 'error');
   }
 
   start();

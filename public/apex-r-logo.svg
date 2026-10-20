@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 170" role="img" aria-labelledby="title">
+  <title id="title">APEX-R A mark</title>
+  <defs>
+    <linearGradient id="blue" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#082b91"/>
+      <stop offset="1" stop-color="#00a8f4"/>
+    </linearGradient>
+    <linearGradient id="orange" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff6638"/>
+      <stop offset="1" stop-color="#ef3528"/>
+    </linearGradient>
+    <linearGradient id="arrow" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#092c91"/>
+      <stop offset="1" stop-color="#00a8f4"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#blue)" d="M10 151 79 18l21 39-47 94z"/>
+  <path fill="url(#orange)" d="M79 18 151 151h-43L70 66z"/>
+  <path fill="#fff" d="m61 127 19-36 19 36z"/>
+  <path fill="url(#arrow)" stroke="#061b52" stroke-linejoin="round" stroke-width="5" d="m36 136 135-78-11-15 51-9-17 49-10-15-140 83z"/>
+</svg>
