@@ -1,7 +1,6 @@
 const { randomUUID } = require('node:crypto');
 const { v2: cloudinary } = require('cloudinary');
 
-const imagePattern = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/;
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
 function configureCloudinary() {
@@ -17,10 +16,14 @@ function configureCloudinary() {
   });
 }
 
-function normalizeImageSource(source, mimeType) {
+function parseImageSource(source) {
   if (typeof source === 'string') {
-    if (source.startsWith('data:image/')) return source;
-    throw new Error('Product image data is invalid.');
+    if (!source.startsWith('data:image/')) {
+      throw new Error('Product image data is invalid.');
+    }
+    const parts = source.split(',');
+    if (parts.length < 2) throw new Error('Product image data is invalid.');
+    return Buffer.from(parts[1], 'base64');
   }
 
   const buffer = Buffer.isBuffer(source)
@@ -35,51 +38,36 @@ function normalizeImageSource(source, mimeType) {
     throw new Error('Product image data is invalid.');
   }
 
-  const resolvedMimeType = mimeType || detectMimeType(buffer) || 'image/jpeg';
-  if (!/^image\/(png|jpeg|webp)$/.test(resolvedMimeType)) {
-    throw new Error('Unsupported product image format. Use PNG, JPG, or WebP.');
-  }
-
-  return `data:${resolvedMimeType};base64,${buffer.toString('base64')}`;
-}
-
-function detectMimeType(buffer) {
-  if (buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
-    return 'image/png';
-  }
-  if (buffer.length >= 2 && buffer.subarray(0, 2).equals(Buffer.from([0xff, 0xd8]))) {
-    return 'image/jpeg';
-  }
-  if (buffer.length >= 12 && buffer.subarray(0, 4).equals(Buffer.from([0x52, 0x49, 0x46, 0x46])) && buffer.subarray(8, 12).equals(Buffer.from([0x57, 0x45, 0x42, 0x50]))) {
-    return 'image/webp';
-  }
-  return null;
+  return buffer;
 }
 
 async function saveProductImage(shopId, imageSource, mimeType) {
-  const dataUrl = normalizeImageSource(imageSource, mimeType);
-  const match = imagePattern.exec(dataUrl);
-  if (!match) throw new Error('Product image data is invalid.');
-  const buffer = Buffer.from(match[2], 'base64');
-  if (!buffer.length || buffer.length > MAX_IMAGE_BYTES) {
+  const imageBuffer = parseImageSource(imageSource);
+  
+  if (imageBuffer.length > MAX_IMAGE_BYTES) {
     throw new Error('Product image must be no larger than 2 MB.');
   }
 
   configureCloudinary();
 
-  // Signed Upload Strategy
-  const result = await cloudinary.uploader.upload(dataUrl, {
-    upload_preset: 'easl4rum',
-    folder: `product-images/${shopId}`,
-    public_id: randomUUID(),
-    resource_type: 'image'
+  // Cloudinary stream upload using Buffer directly to prevent "Resource is invalid" error
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: `product-images/${shopId}`,
+        public_id: randomUUID(),
+        resource_type: 'image'
+      },
+      (error, result) => {
+        if (error || !result?.secure_url || !result?.public_id) {
+          return reject(new Error(error?.message || 'Cloudinary image upload failed.'));
+        }
+        resolve({ imageUrl: result.secure_url, imagePublicId: result.public_id });
+      }
+    );
+
+    uploadStream.end(imageBuffer);
   });
-
-  if (!result?.secure_url || !result.public_id) {
-    throw new Error('Cloudinary did not return the uploaded product image URL and ID.');
-  }
-
-  return { imageUrl: result.secure_url, imagePublicId: result.public_id };
 }
 
 async function removeProductImage(publicId) {
