@@ -17,7 +17,47 @@ function configureCloudinary() {
   });
 }
 
-async function saveProductImage(shopId, dataUrl) {
+function normalizeImageSource(source, mimeType) {
+  if (typeof source === 'string') {
+    if (source.startsWith('data:image/')) return source;
+    throw new Error('Product image data is invalid.');
+  }
+
+  const buffer = Buffer.isBuffer(source)
+    ? source
+    : source && typeof source === 'object' && ArrayBuffer.isView(source)
+      ? Buffer.from(source.buffer.slice(source.byteOffset, source.byteOffset + source.byteLength))
+      : source && source.buffer instanceof ArrayBuffer
+        ? Buffer.from(source.buffer)
+        : null;
+
+  if (!buffer || !buffer.length) {
+    throw new Error('Product image data is invalid.');
+  }
+
+  const resolvedMimeType = mimeType || detectMimeType(buffer) || 'image/jpeg';
+  if (!/^image\/(png|jpeg|webp)$/.test(resolvedMimeType)) {
+    throw new Error('Unsupported product image format. Use PNG, JPG, or WebP.');
+  }
+
+  return `data:${resolvedMimeType};base64,${buffer.toString('base64')}`;
+}
+
+function detectMimeType(buffer) {
+  if (buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
+    return 'image/png';
+  }
+  if (buffer.length >= 2 && buffer.subarray(0, 2).equals(Buffer.from([0xff, 0xd8]))) {
+    return 'image/jpeg';
+  }
+  if (buffer.length >= 12 && buffer.subarray(0, 4).equals(Buffer.from([0x52, 0x49, 0x46, 0x46])) && buffer.subarray(8, 12).equals(Buffer.from([0x57, 0x45, 0x42, 0x50]))) {
+    return 'image/webp';
+  }
+  return null;
+}
+
+async function saveProductImage(shopId, imageSource, mimeType) {
+  const dataUrl = normalizeImageSource(imageSource, mimeType);
   const match = imagePattern.exec(dataUrl);
   if (!match) throw new Error('Product image data is invalid.');
   const buffer = Buffer.from(match[2], 'base64');
