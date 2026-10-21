@@ -18,6 +18,7 @@
   document.querySelectorAll('[data-logout]').forEach((button) => button.addEventListener('click', () => {
     POS.signOut().catch((error) => notify(error.message));
   }));
+  document.getElementById('share-marketplace').addEventListener('click', shareMarketplace);
   document.querySelectorAll('[data-panel]').forEach((button) => button.addEventListener('click', () => openPanel(button.dataset.panel)));
   document.querySelectorAll('[data-open-panel]').forEach((button) => button.addEventListener('click', () => openPanel(button.dataset.openPanel)));
   document.querySelectorAll('[data-report]').forEach((button) => button.addEventListener('click', () => openReport(button.dataset.report)));
@@ -40,6 +41,22 @@
     toast.classList.remove('hidden');
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => toast.classList.add('hidden'), 3400);
+  }
+
+  async function shareMarketplace() {
+    const shareUrl = document.getElementById('marketplace-share-link').href;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: `${shopProfile.businessName} marketplace`, url: shareUrl });
+      } else if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(shareUrl);
+        notify('Marketplace link copied. Share it with your customers.');
+      } else {
+        throw new Error('Sharing is not available in this browser.');
+      }
+    } catch (error) {
+      if (error.name !== 'AbortError') notify(error.message || 'Unable to share the marketplace link.');
+    }
   }
 
   function availability(product) {
@@ -477,6 +494,7 @@
       document.getElementById('shop-email').textContent = result.user.email;
       document.getElementById('marketplace-share-link').href =
         `/marketplace.html?shop=${encodeURIComponent(result.user.id)}`;
+      document.getElementById('share-marketplace').disabled = false;
       await refreshData();
     } catch {
       window.location.assign('/login.html');

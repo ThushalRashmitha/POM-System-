@@ -37,11 +37,15 @@ const protectedPageRoles = new Map([
 ]);
 app.use((req, res, next) => {
   const pagePath = req.path.toLowerCase();
-  if (!pagePath.endsWith('.html') && pagePath !== '/') return next();
+  if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+  if (pagePath.startsWith('/api/') || pagePath === '/health') return next();
   if (publicPages.has(pagePath)) return next();
   const role = protectedPageRoles.get(pagePath);
-  if (!role) return res.redirect('/login.html');
-  return requirePageRole(role)(req, res, next);
+  if (role) return requirePageRole(role)(req, res, next);
+  if (pagePath.endsWith('.html') || (!path.extname(pagePath) && req.accepts('html'))) {
+    return res.redirect('/login.html');
+  }
+  return next();
 });
 
 app.use(express.static(publicDirectory));
