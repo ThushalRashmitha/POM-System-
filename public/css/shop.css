@@ -15,6 +15,8 @@
 .sidebar-nav .side-link{min-height:48px;padding:0 14px;font-size:14px}
 .workspace{max-width:1500px}
 .panel .page-heading h1{font-size:28px}
+.privacy-toggle{flex:none}
+.missing-cost{color:#a46b10;font-weight:700}
 .sale-form-stacked{display:grid;gap:15px;padding-bottom:21px}
 .sale-lines{display:grid;gap:10px;padding:0 21px}
 .sale-line{display:grid;grid-template-columns:minmax(0,1fr) 130px 40px;gap:10px;align-items:end}

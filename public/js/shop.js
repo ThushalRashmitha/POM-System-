@@ -14,6 +14,7 @@
   let originalImageUrl = '';
   let originalImagePublicId = '';
   let previewObjectUrl = null;
+  let amountsHidden = true;
   let toastTimer;
   let shopProfile = { businessName: 'APEX-R POS System', whatsapp: '' };
 
@@ -21,6 +22,10 @@
     POS.signOut().catch((error) => notify(error.message));
   }));
   document.getElementById('share-marketplace').addEventListener('click', shareMarketplace);
+  document.getElementById('privacy-toggle').addEventListener('click', () => {
+    amountsHidden = !amountsHidden;
+    updatePrivacyDisplay();
+  });
   document.querySelectorAll('[data-panel]').forEach((button) => button.addEventListener('click', () => openPanel(button.dataset.panel)));
   document.querySelectorAll('[data-open-panel]').forEach((button) => button.addEventListener('click', () => openPanel(button.dataset.openPanel)));
   document.querySelectorAll('[data-report]').forEach((button) => button.addEventListener('click', () => openReport(button.dataset.report)));
@@ -71,8 +76,13 @@
   function renderProducts() {
     productsTable.innerHTML = products.map((product) => {
       const name = POS.escapeHtml(product.name);
+      const costPrice = hasCostPrice(product) ? Number(product.costPrice) : null;
+      const unitProfit = costPrice === null ? null : Number(product.price) - costPrice;
       return `<tr>
-        <td class="table-title">${name}</td><td>${POS.formatCurrency(product.price)}</td>
+        <td class="table-title">${name}</td>
+        <td>${costPrice === null ? '<span class="missing-cost">Add CP</span>' : privateAmountMarkup(costPrice)}</td>
+        <td>${privateAmountMarkup(product.price)}</td>
+        <td>${unitProfit === null ? '—' : privateAmountMarkup(unitProfit)}</td>
         <td>${product.stock}</td><td>${availability(product)}</td>
         <td><div class="actions">
           <button class="button button-quiet button-small" data-product-edit="${product._id}">Edit</button>
@@ -80,22 +90,30 @@
           <button class="button button-danger button-small" data-product-delete="${product._id}" aria-label="Delete ${name}"><i class="fa-solid fa-trash"></i></button>
         </div></td>
       </tr>`;
-    }).join('') || '<tr><td colspan="5">No products yet. Add a product above.</td></tr>';
+    }).join('') || '<tr><td colspan="7">No products yet. Add a product above.</td></tr>';
 
     overviewProducts.innerHTML = products.slice(0, 8).map((product) =>
-      `<tr><td class="table-title">${POS.escapeHtml(product.name)}</td><td>${POS.formatCurrency(product.price)}</td><td>${product.stock}</td><td>${availability(product)}</td></tr>`
+      `<tr><td class="table-title">${POS.escapeHtml(product.name)}</td><td>${privateAmountMarkup(product.price)}</td><td>${product.stock}</td><td>${availability(product)}</td></tr>`
     ).join('') || '<tr><td colspan="4">Add products to see them here.</td></tr>';
 
     const low = products.filter((product) => product.stock <= 7);
     lowStockProducts.innerHTML = low.map((product) =>
-      `<tr><td class="table-title">${POS.escapeHtml(product.name)}</td><td class="stock-low-value">${product.stock}</td><td>${POS.formatCurrency(product.price)}</td></tr>`
+      `<tr><td class="table-title">${POS.escapeHtml(product.name)}</td><td class="stock-low-value">${product.stock}</td><td>${privateAmountMarkup(product.price)}</td></tr>`
     ).join('') || '<tr><td colspan="3">No low-stock products.</td></tr>';
 
     document.getElementById('stat-products').textContent = products.length;
     document.getElementById('stat-low-stock').textContent = low.length;
     const stockValue = products.reduce((total, product) =>
       total + (Number(product.price) || 0) * (Number(product.stock) || 0), 0);
-    document.getElementById('stat-stock-value').textContent = POS.formatCurrency(stockValue);
+    const knownCostProducts = products.filter(hasCostPrice);
+    const stockCostValue = knownCostProducts.reduce((total, product) =>
+      total + Number(product.costPrice) * (Number(product.stock) || 0), 0);
+    const stockProfit = knownCostProducts.reduce((total, product) =>
+      total + (Number(product.price) - Number(product.costPrice)) * (Number(product.stock) || 0), 0);
+    setPrivateAmount(document.getElementById('stat-stock-value'), stockValue);
+    setPrivateAmount(document.getElementById('stat-stock-cost-value'), stockCostValue);
+    setPrivateAmount(document.getElementById('stat-stock-profit'), stockProfit);
+    updatePrivacyDisplay();
     renderPosProducts();
     renderCart();
   }
@@ -171,14 +189,17 @@
       const items = invoice.items.map((item) => `${POS.escapeHtml(item.name)} × ${item.quantity}`).join(', ');
       return `<tr><td class="table-title">${POS.escapeHtml(invoice.invoiceNumber)}</td>
         <td>${POS.escapeHtml(POS.formatDate(invoice.soldAt))}</td><td>${items}</td>
-        <td class="table-title">${POS.formatCurrency(invoice.total)}</td>
+        <td class="table-title">${privateAmountMarkup(invoice.total)}</td>
+        <td class="table-title">${invoice.grossProfit === null || invoice.grossProfit === undefined
+    ? '<span class="missing-cost">CP not recorded</span>' : privateAmountMarkup(invoice.grossProfit)}</td>
         <td><div class="actions">
           <button class="button button-quiet button-small" data-invoice-view="${invoice._id}" title="View receipt"><i class="fa-regular fa-eye"></i></button>
           <button class="button button-quiet button-small" data-invoice-print="${invoice._id}" title="Print receipt"><i class="fa-solid fa-print"></i></button>
           <button class="button button-danger button-small" data-invoice-delete="${invoice._id}" title="Delete invoice and report"><i class="fa-solid fa-trash"></i></button>
         </div></td></tr>`;
-    }).join('') || '<tr><td colspan="5">No invoices found for this period.</td></tr>';
+    }).join('') || '<tr><td colspan="6">No invoices found for this period.</td></tr>';
     renderReports();
+    updatePrivacyDisplay();
   }
 
   function renderReports() {
@@ -188,13 +209,18 @@
     const todayInvoices = invoices.filter((invoice) => localDateKey(new Date(invoice.soldAt)) === todayKey);
     const monthInvoices = invoices.filter((invoice) => localDateKey(new Date(invoice.soldAt)).startsWith(monthKey));
     const sum = (list) => list.reduce((total, invoice) => total + invoice.total, 0);
+    const profitSum = (list) => list.reduce((total, invoice) =>
+      total + (Number.isFinite(invoice.grossProfit) ? invoice.grossProfit : 0), 0);
     document.getElementById('stat-bills-today').textContent = todayInvoices.length;
     document.getElementById('stat-bills-month').textContent = monthInvoices.length;
-    document.getElementById('stat-income-today').textContent = POS.formatCurrency(sum(todayInvoices));
-    document.getElementById('stat-income-month').textContent = POS.formatCurrency(sum(monthInvoices));
-    document.getElementById('report-today').textContent = POS.formatCurrency(sum(todayInvoices));
-    document.getElementById('report-month').textContent = POS.formatCurrency(sum(monthInvoices));
-    document.getElementById('report-total').textContent = POS.formatCurrency(sum(invoices));
+    setPrivateAmount(document.getElementById('stat-income-today'), sum(todayInvoices));
+    setPrivateAmount(document.getElementById('stat-income-month'), sum(monthInvoices));
+    setPrivateAmount(document.getElementById('report-today'), sum(todayInvoices));
+    setPrivateAmount(document.getElementById('report-month'), sum(monthInvoices));
+    setPrivateAmount(document.getElementById('report-total'), sum(invoices));
+    setPrivateAmount(document.getElementById('report-profit-today'), profitSum(todayInvoices));
+    setPrivateAmount(document.getElementById('report-profit-month'), profitSum(monthInvoices));
+    setPrivateAmount(document.getElementById('report-profit-total'), profitSum(invoices));
 
     const sales = new Map();
     invoices.forEach((invoice) => invoice.items.forEach((item) => {
@@ -204,9 +230,36 @@
       sales.set(item.name, previous);
     }));
     const rows = [...sales.entries()].sort((a, b) => b[1].revenue - a[1].revenue).map(([name, values]) =>
-      `<tr><td class="table-title">${POS.escapeHtml(name)}</td><td>${values.quantity}</td><td class="table-title">${POS.formatCurrency(values.revenue)}</td></tr>`
+      `<tr><td class="table-title">${POS.escapeHtml(name)}</td><td>${values.quantity}</td><td class="table-title">${privateAmountMarkup(values.revenue)}</td></tr>`
     ).join('');
     document.getElementById('product-sales-table').innerHTML = rows || '<tr><td colspan="3">No product sales recorded yet.</td></tr>';
+    updatePrivacyDisplay();
+  }
+
+  function hasCostPrice(product) {
+    return product.costPrice !== undefined && product.costPrice !== null
+      && Number.isFinite(Number(product.costPrice));
+  }
+
+  function privateAmountMarkup(amount) {
+    const visibleAmount = POS.formatCurrency(amount);
+    return `<span data-private-amount data-visible-amount="${POS.escapeHtml(visibleAmount)}">${amountsHidden ? '••••••' : visibleAmount}</span>`;
+  }
+
+  function setPrivateAmount(element, amount) {
+    element.dataset.visibleAmount = POS.formatCurrency(amount);
+    element.dataset.privateAmount = '';
+    element.textContent = amountsHidden ? '••••••' : element.dataset.visibleAmount;
+  }
+
+  function updatePrivacyDisplay() {
+    document.querySelectorAll('[data-private-amount]').forEach((element) => {
+      element.textContent = amountsHidden ? '••••••' : element.dataset.visibleAmount;
+    });
+    const toggle = document.getElementById('privacy-toggle');
+    toggle.setAttribute('aria-pressed', String(!amountsHidden));
+    toggle.setAttribute('aria-label', `${amountsHidden ? 'Show' : 'Hide'} sensitive amounts`);
+    toggle.innerHTML = `<i class="fa-solid ${amountsHidden ? 'fa-eye-slash' : 'fa-eye'}" aria-hidden="true"></i> ${amountsHidden ? 'Show' : 'Hide'} amounts`;
   }
 
   function localDateKey(date) {
@@ -235,12 +288,13 @@
     const rows = filteredInvoices();
     const escapeCsv = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
     const csv = [
-      ['Invoice number', 'Date', 'Items', 'Total'],
+      ['Invoice number', 'Date', 'Items', 'Total', 'Gross profit'],
       ...rows.map((invoice) => [
         invoice.invoiceNumber,
         new Date(invoice.soldAt).toISOString(),
         invoice.items.map((item) => `${item.name} x ${item.quantity}`).join('; '),
-        invoice.total
+        invoice.total,
+        invoice.grossProfit ?? ''
       ])
     ].map((row) => row.map(escapeCsv).join(',')).join('\r\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -325,7 +379,7 @@
         || (editingProductId && originalImageUrl.startsWith('data:image/') ? originalImageUrl : '');
       const payload = {
         name: values.get('name'), description: values.get('description'),
-        price: values.get('price'), stock: values.get('stock')
+        costPrice: values.get('costPrice'), price: values.get('price'), stock: values.get('stock')
       };
       if (!wasEditing || imageFile.size || values.get('imageUrl') || !originalImageUrl.startsWith('data:image/')) {
         payload.imageUrl = imageUrl;
@@ -379,7 +433,7 @@
         if (!product) return;
         editingProductId = product._id;
         const form = document.getElementById('product-form');
-        for (const field of ['name', 'description', 'price', 'stock']) {
+        for (const field of ['name', 'description', 'costPrice', 'price', 'stock']) {
           form.elements.namedItem(field).value = product[field] ?? '';
         }
         originalImageUrl = product.imageUrl || '';

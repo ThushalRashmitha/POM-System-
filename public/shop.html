@@ -26,7 +26,7 @@
     </aside>
     <main class="workspace">
       <section class="panel active" id="panel-dashboard">
-        <div class="page-heading"><div><span class="eyebrow">YOUR BUSINESS</span><h1>Dashboard</h1><p id="shop-brand">Sales and stock for your shop.</p></div></div>
+        <div class="page-heading"><div><span class="eyebrow">YOUR BUSINESS</span><h1>Dashboard</h1><p id="shop-brand">Sales and stock for your shop.</p></div><button class="button button-outline privacy-toggle" id="privacy-toggle" type="button" aria-label="Show sensitive amounts" aria-pressed="false"><i class="fa-solid fa-eye-slash" aria-hidden="true"></i> Show amounts</button></div>
         <div class="stat-grid">
           <article class="stat-card"><span class="stat-icon violet"><i class="fa-solid fa-receipt"></i></span><div><span>Bills today</span><strong id="stat-bills-today">0</strong></div></article>
           <article class="stat-card"><span class="stat-icon violet"><i class="fa-solid fa-calendar-days"></i></span><div><span>Bills this month</span><strong id="stat-bills-month">0</strong></div></article>
@@ -35,6 +35,8 @@
           <article class="stat-card"><span class="stat-icon amber"><i class="fa-solid fa-box"></i></span><div><span>Products</span><strong id="stat-products">0</strong></div></article>
           <article class="stat-card"><span class="stat-icon rose"><i class="fa-solid fa-triangle-exclamation"></i></span><div><span>Low stock</span><strong id="stat-low-stock">0</strong></div></article>
           <article class="stat-card"><span class="stat-icon green"><i class="fa-solid fa-coins"></i></span><div><span>Stock value (selling price)</span><strong id="stat-stock-value">Rs. 0.00</strong></div></article>
+          <article class="stat-card"><span class="stat-icon violet"><i class="fa-solid fa-boxes-stacked"></i></span><div><span>Stock cost value</span><strong id="stat-stock-cost-value">Rs. 0.00</strong></div></article>
+          <article class="stat-card"><span class="stat-icon green"><i class="fa-solid fa-chart-line"></i></span><div><span>Potential stock profit <small>(products with CP)</small></span><strong id="stat-stock-profit">Rs. 0.00</strong></div></article>
         </div>
         <div class="content-card"><div class="card-heading"><div><h2>Low stock alert</h2><p>Products that need restocking.</p></div><button class="button button-outline" data-open-panel="inventory">Manage inventory</button></div><div class="table-wrap"><table><thead><tr><th>Product</th><th>Current stock</th><th>Price</th></tr></thead><tbody id="low-stock-products"></tbody></table></div></div>
         <div class="content-card">
@@ -63,7 +65,8 @@
           <form id="product-form" class="product-form">
             <label>Product name<input name="name" required minlength="2" maxlength="160" placeholder="Product name"></label>
             <label>Description<input name="description" maxlength="2000" placeholder="Details customers should know"></label>
-            <label>Price (Rs.)<input name="price" type="number" min="0" step="0.01" required placeholder="0.00"></label>
+            <label>Cost Price (CP) (Rs.)<input name="costPrice" type="number" min="0" step="0.01" required placeholder="Purchase price"></label>
+            <label>Selling Price (SP) (Rs.)<input name="price" type="number" min="0" step="0.01" required placeholder="Selling price"></label>
             <label>Available stock<input name="stock" type="number" min="0" step="1" required placeholder="0"></label>
             <label class="form-wide">Image URL <span class="optional-label">(optional)</span><input name="imageUrl" type="url" placeholder="https://example.com/product.jpg"></label>
             <label class="form-wide">Or choose an image from your computer <span class="optional-label">(PNG, JPG, or WebP)</span><input name="imageFile" type="file" accept="image/png,image/jpeg,image/webp"></label>
@@ -75,23 +78,26 @@
           </form>
           <div id="product-message" class="notice hidden" role="status"></div>
         </div>
-        <div class="content-card"><div class="card-heading"><div><h2>Inventory</h2></div></div><div class="table-wrap"><table><thead><tr><th>Product</th><th>Price</th><th>Stock</th><th>Marketplace</th><th>Action</th></tr></thead><tbody id="products-table"></tbody></table></div></div>
+        <div class="content-card"><div class="card-heading"><div><h2>Inventory</h2></div></div><div class="table-wrap"><table><thead><tr><th>Product</th><th>Cost Price (CP)</th><th>Selling Price (SP)</th><th>Profit per item</th><th>Stock</th><th>Marketplace</th><th>Action</th></tr></thead><tbody id="products-table"></tbody></table></div></div>
       </section>
       <section class="panel" id="panel-invoices">
         <div class="page-heading"><div><span class="eyebrow">SALES RECORDS</span><h1>Invoices</h1><p>View, print, export, or delete invoice records.</p></div></div>
         <div class="content-card">
           <div class="card-heading report-heading"><div><h2>Sales history</h2><p>Filter invoices by date and manage receipt records.</p></div><div class="invoice-filters"><input type="date" id="date-from" aria-label="From date"><input type="date" id="date-to" aria-label="To date"><button class="button button-quiet button-small" id="clear-invoice-filters">Clear</button><button class="button button-outline button-small" id="export-invoices"><i class="fa-solid fa-download"></i> Export CSV</button></div></div>
-          <div class="table-wrap"><table><thead><tr><th>Invoice</th><th>Date</th><th>Items</th><th>Total</th><th>Actions</th></tr></thead><tbody id="invoices-table"></tbody></table></div>
+          <div class="table-wrap"><table><thead><tr><th>Invoice</th><th>Date</th><th>Items</th><th>Total</th><th>Profit</th><th>Actions</th></tr></thead><tbody id="invoices-table"></tbody></table></div>
         </div>
       </section>
       <section class="panel" id="panel-reports">
-        <div class="page-heading"><div><span class="eyebrow">BUSINESS PERFORMANCE</span><h1>Reports</h1><p>Track revenue and see which products sell best.</p></div></div>
+        <div class="page-heading"><div><span class="eyebrow">BUSINESS PERFORMANCE</span><h1>Reports</h1><p>Track revenue and see which products sell best. Profit is available for bills where every product has a recorded CP.</p></div></div>
         <div class="report-tabs"><button class="report-tab active" data-report="sales">Sales report</button><button class="report-tab" data-report="products">Product sales</button></div>
         <section class="report-panel active" id="report-sales">
           <div class="stat-grid report-stat-grid">
             <article class="stat-card"><span class="stat-icon green"><i class="fa-solid fa-calendar-day"></i></span><div><span>Today's revenue</span><strong id="report-today">Rs. 0.00</strong></div></article>
             <article class="stat-card"><span class="stat-icon violet"><i class="fa-solid fa-calendar-days"></i></span><div><span>This month's revenue</span><strong id="report-month">Rs. 0.00</strong></div></article>
             <article class="stat-card"><span class="stat-icon amber"><i class="fa-solid fa-chart-line"></i></span><div><span>All-time revenue</span><strong id="report-total">Rs. 0.00</strong></div></article>
+            <article class="stat-card"><span class="stat-icon green"><i class="fa-solid fa-sack-dollar"></i></span><div><span>Today's profit</span><strong id="report-profit-today">Rs. 0.00</strong></div></article>
+            <article class="stat-card"><span class="stat-icon green"><i class="fa-solid fa-sack-dollar"></i></span><div><span>This month's profit</span><strong id="report-profit-month">Rs. 0.00</strong></div></article>
+            <article class="stat-card"><span class="stat-icon green"><i class="fa-solid fa-sack-dollar"></i></span><div><span>All-time recorded profit</span><strong id="report-profit-total">Rs. 0.00</strong></div></article>
           </div>
         </section>
         <section class="report-panel" id="report-products">
