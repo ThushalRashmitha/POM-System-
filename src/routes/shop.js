@@ -2,6 +2,7 @@ const express = require('express');
 const Product = require('../models/Product');
 const Invoice = require('../models/Invoice');
 const { requireRole, requireUser } = require('../middleware/auth');
+const { createProductImageUploadSignature } = require('../services/productImage');
 
 const router = express.Router();
 router.use(requireUser, requireRole('shop'));
@@ -14,9 +15,21 @@ router.get('/products', async (req, res, next) => {
   }
 });
 
+router.post('/product-images/signature', (req, res, next) => {
+  try {
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/webp'];
+    if (!allowedTypes.includes(req.body?.mimeType)) {
+      return res.status(400).json({ error: 'Choose a PNG, JPG, or WebP image.' });
+    }
+    res.json(createProductImageUploadSignature(req.user.id));
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.post('/products', async (req, res, next) => {
   try {
-    const { name, description = '', imageUrl = '' } = req.body;
+    const { name, description = '', imageUrl = '', imagePublicId = '' } = req.body;
     const price = Number(req.body.price);
     const stock = Number(req.body.stock);
     if (typeof name !== 'string' || name.trim().length < 2 || name.trim().length > 160) {
@@ -29,7 +42,10 @@ router.post('/products', async (req, res, next) => {
       return res.status(400).json({ error: 'Product description must be 2,000 characters or fewer.' });
     }
     if (typeof imageUrl !== 'string' || (imageUrl && !isValidProductImage(imageUrl))) {
-      return res.status(400).json({ error: 'Product image must be a valid HTTP or HTTPS URL or a PNG, JPG, or WebP image no larger than 2 MB.' });
+      return res.status(400).json({ error: 'Product image must be a valid HTTP or HTTPS URL.' });
+    }
+    if (typeof imagePublicId !== 'string' || (imagePublicId && !isOwnedProductImage(imagePublicId, req.user.id))) {
+      return res.status(400).json({ error: 'Product image is invalid.' });
     }
 
     const product = await Product.createProduct({
@@ -37,6 +53,7 @@ router.post('/products', async (req, res, next) => {
       name: name.trim(),
       description: description.trim(),
       imageUrl,
+      imagePublicId,
       price,
       stock
     });
@@ -50,7 +67,7 @@ router.patch('/products/:id', async (req, res, next) => {
   try {
     if (!isValidDocumentId(req.params.id)) return res.status(400).json({ error: 'Invalid product ID.' });
     const updates = {};
-    for (const field of ['name', 'description', 'imageUrl', 'price', 'stock', 'available']) {
+    for (const field of ['name', 'description', 'imageUrl', 'imagePublicId', 'price', 'stock', 'available']) {
       if (Object.hasOwn(req.body, field)) updates[field] = req.body[field];
     }
     if (Object.hasOwn(updates, 'price')) updates.price = Number(updates.price);
@@ -71,7 +88,15 @@ router.patch('/products/:id', async (req, res, next) => {
     if (Object.hasOwn(updates, 'description')) updates.description = updates.description.trim();
     if (Object.hasOwn(updates, 'imageUrl')
       && (typeof updates.imageUrl !== 'string' || (updates.imageUrl && !isValidProductImage(updates.imageUrl)))) {
-      return res.status(400).json({ error: 'Product image must be a valid HTTP or HTTPS URL or a PNG, JPG, or WebP image no larger than 2 MB.' });
+      return res.status(400).json({ error: 'Product image must be a valid HTTP or HTTPS URL.' });
+    }
+    if (Object.hasOwn(updates, 'imagePublicId')
+      && (typeof updates.imagePublicId !== 'string'
+        || (updates.imagePublicId && !isOwnedProductImage(updates.imagePublicId, req.user.id)))) {
+      return res.status(400).json({ error: 'Product image is invalid.' });
+    }
+    if (Object.hasOwn(updates, 'imagePublicId') && !Object.hasOwn(updates, 'imageUrl')) {
+      return res.status(400).json({ error: 'An image URL is required with the image ID.' });
     }
     if (Object.hasOwn(updates, 'available') && typeof updates.available !== 'boolean') {
       return res.status(400).json({ error: 'Marketplace availability must be true or false.' });
@@ -153,9 +178,11 @@ function isValidHttpUrl(value) {
 
 function isValidProductImage(value) {
   if (typeof value !== 'string') return false;
-  if (isValidHttpUrl(value)) return true;
-  const match = /^data:image\/(?:png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/.exec(value);
-  return Boolean(match && Buffer.from(match[1], 'base64').length <= 2 * 1024 * 1024);
+  return isValidHttpUrl(value);
+}
+
+function isOwnedProductImage(publicId, shopId) {
+  return publicId.startsWith(`products/${shopId}/`) && publicId.length <= 255;
 }
 
 function isValidDocumentId(id) {
