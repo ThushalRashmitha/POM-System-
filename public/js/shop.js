@@ -93,6 +93,9 @@
 
     document.getElementById('stat-products').textContent = products.length;
     document.getElementById('stat-low-stock').textContent = low.length;
+    const stockValue = products.reduce((total, product) =>
+      total + (Number(product.price) || 0) * (Number(product.stock) || 0), 0);
+    document.getElementById('stat-stock-value').textContent = POS.formatCurrency(stockValue);
     renderPosProducts();
     renderCart();
   }
