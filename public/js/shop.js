@@ -356,6 +356,9 @@
     const imageFiles = [...values.getAll('imageFiles')].filter((file) => file.size > 0);
     const imageUrls = values.get('imageUrls').split(/\r?\n/).map((url) => url.trim()).filter(Boolean);
     const wasEditing = Boolean(editingProductId);
+    const saveButton = document.getElementById('product-save-button');
+    const uploadedImages = [];
+    saveButton.disabled = true;
     try {
       for (const imageUrl of imageUrls) {
         let url;
@@ -369,7 +372,6 @@
         }
       }
       imageFiles.forEach(validateProductImage);
-      const uploadedImages = [];
       for (const file of imageFiles) {
         uploadedImages.push(await uploadProductImage(file));
       }
@@ -387,10 +389,14 @@
         stock: Number(values.get('stock')),
         images
       };
-      await POS.api(editingProductId ? `/shop/products/${editingProductId}` : '/shop/products', {
-        method: editingProductId ? 'PATCH' : 'POST',
-        body: JSON.stringify(payload)
-      });
+      try {
+        await POS.api(editingProductId ? `/shop/products/${editingProductId}` : '/shop/products', {
+          method: editingProductId ? 'PATCH' : 'POST',
+          body: JSON.stringify(payload)
+        });
+      } catch (error) {
+        throw new Error(`Images uploaded, but the product could not be saved: ${error.message}`);
+      }
       form.reset();
       hideImagePreview();
       resetProductEdit();
@@ -398,6 +404,8 @@
       notify(wasEditing ? 'Product updated.' : 'Product added to your inventory.');
     } catch (error) {
       POS.showNotice(document.getElementById('product-message'), error.message, 'error');
+    } finally {
+      saveButton.disabled = false;
     }
   });
 
@@ -512,32 +520,38 @@
   });
 
   async function uploadProductImage(file) {
-    const signature = await POS.api('/shop/product-images/signature', {
-      method: 'POST',
-      body: JSON.stringify({ mimeType: file.type })
-    });
-    const body = new FormData();
-    body.append('file', file);
-    body.append('api_key', signature.apiKey);
-    body.append('timestamp', signature.timestamp);
-    body.append('folder', signature.folder);
-    body.append('public_id', signature.public_id);
-    body.append('signature', signature.signature);
-    const response = await fetch(`https://api.cloudinary.com/v1_1/${signature.cloudName}/image/upload`, {
-      method: 'POST',
-      body
-    });
-    const result = await response.json();
-    if (!response.ok) {
-      throw new Error(result.error?.message || 'Unable to upload the selected image.');
+    try {
+      const signature = await POS.api('/shop/product-images/signature', {
+        method: 'POST',
+        body: JSON.stringify({ mimeType: file.type })
+      });
+      const body = new FormData();
+      body.append('file', file, file.name);
+      body.append('api_key', signature.apiKey);
+      body.append('timestamp', signature.timestamp);
+      body.append('folder', signature.folder);
+      body.append('public_id', signature.public_id);
+      body.append('signature', signature.signature);
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${encodeURIComponent(signature.cloudName)}/image/upload`, {
+        method: 'POST',
+        body
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result.error?.message || `Cloudinary rejected the upload (HTTP ${response.status}).`);
+      }
+      if (!result.secure_url || !result.public_id) {
+        throw new Error('Cloudinary accepted the request but did not return an image URL and ID.');
+      }
+      return { imageUrl: result.secure_url, imagePublicId: result.public_id };
+    } catch (error) {
+      throw new Error(`Unable to upload "${file.name}": ${error.message}`);
     }
-    return { imageUrl: result.secure_url, imagePublicId: result.public_id };
   }
 
   function validateProductImage(file) {
-    const allowedTypes = ['image/png', 'image/jpeg', 'image/webp'];
-    if (!allowedTypes.includes(file.type)) {
-      throw new Error('Choose a PNG, JPG, or WebP image.');
+    if (!file.type.startsWith('image/')) {
+      throw new Error(`"${file.name}" is not recognized as an image file.`);
     }
   }
 

@@ -17,9 +17,9 @@ router.get('/products', async (req, res, next) => {
 
 router.post('/product-images/signature', (req, res, next) => {
   try {
-    const allowedTypes = ['image/png', 'image/jpeg', 'image/webp'];
-    if (!allowedTypes.includes(req.body?.mimeType)) {
-      return res.status(400).json({ error: 'Choose a PNG, JPG, or WebP image.' });
+    const mimeType = req.body?.mimeType;
+    if (typeof mimeType !== 'string' || !mimeType.startsWith('image/')) {
+      return res.status(400).json({ error: 'Choose a file recognized as an image.' });
     }
     res.json(createProductImageUploadSignature(req.user.id));
   } catch (error) {
