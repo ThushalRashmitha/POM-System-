@@ -382,7 +382,9 @@
       ];
       const payload = {
         name: values.get('name'), description: values.get('description'),
-        costPrice: values.get('costPrice'), price: values.get('price'), stock: values.get('stock'),
+        costPrice: Number(values.get('costPrice')),
+        price: Number(values.get('price')),
+        stock: Number(values.get('stock')),
         images
       };
       await POS.api(editingProductId ? `/shop/products/${editingProductId}` : '/shop/products', {

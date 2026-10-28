@@ -16,6 +16,8 @@ function productFromSnapshot(snapshot) {
     _id: snapshot.id,
     id: snapshot.id,
     ...data,
+    shop: data.shop || data.shopId || '',
+    shopId: data.shopId || data.shop || '',
     images,
     imageUrl: primaryImage.imageUrl || '',
     imagePublicId: primaryImage.imagePublicId || ''
@@ -48,22 +50,42 @@ async function findById(id) {
 async function findOwnedSnapshot(id, shopId) {
   const snapshot = await getDatabase().collection(PRODUCTS)
     .where(FieldPath.documentId(), '==', String(id))
-    .where('shop', '==', String(shopId))
     .limit(1)
     .get();
-  return snapshot.empty ? null : snapshot.docs[0];
+  if (snapshot.empty) return null;
+  const product = productFromSnapshot(snapshot.docs[0]);
+  return product.shop === String(shopId) ? snapshot.docs[0] : null;
 }
 
 async function createProduct(shopId, product) {
+  const ownerId = typeof shopId === 'string' ? shopId.trim() : '';
+  if (!ownerId) {
+    throw Object.assign(new Error('A valid shop account is required to add a product.'), { status: 400 });
+  }
+  for (const field of ['costPrice', 'price']) {
+    if (!Number.isFinite(product[field]) || product[field] < 0) {
+      const label = field === 'costPrice' ? 'Cost' : 'Selling';
+      throw Object.assign(new Error(`${label} price must be a valid non-negative amount.`), { status: 400 });
+    }
+  }
+  if (!Number.isInteger(product.stock) || product.stock < 0) {
+    throw Object.assign(new Error('Stock must be a non-negative whole number.'), { status: 400 });
+  }
   const ref = getDatabase().collection(PRODUCTS).doc();
   const now = new Date().toISOString();
-  const images = Array.isArray(product.images)
-    ? product.images
-    : (product.imageUrl ? [{ imageUrl: product.imageUrl, imagePublicId: product.imagePublicId || '' }] : []);
+  const images = Array.isArray(product.images) ? product.images.map((image) => ({
+    imageUrl: image.imageUrl,
+    imagePublicId: image.imagePublicId || ''
+  })) : [];
   const primaryImage = images[0] || {};
   const record = {
-    ...product,
-    shop: String(shopId),
+    name: product.name,
+    description: product.description || '',
+    costPrice: product.costPrice,
+    price: product.price,
+    stock: product.stock,
+    shop: ownerId,
+    shopId: ownerId,
     images,
     imageUrl: primaryImage.imageUrl || '',
     imagePublicId: primaryImage.imagePublicId || '',
@@ -75,7 +97,11 @@ async function createProduct(shopId, product) {
     await ref.create(record);
     return { _id: ref.id, id: ref.id, ...record };
   } catch (error) {
-    await Promise.all(images.map((image) => image.imagePublicId).filter(Boolean).map(removeProductImage));
+    const cleanupResults = await Promise.allSettled(
+      images.map((image) => image.imagePublicId).filter(Boolean).map(removeProductImage)
+    );
+    cleanupResults.filter((result) => result.status === 'rejected')
+      .forEach((result) => console.error('Unable to clean up an uploaded product image:', result.reason));
     throw error;
   }
 }

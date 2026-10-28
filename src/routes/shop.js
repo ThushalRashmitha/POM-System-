@@ -30,9 +30,9 @@ router.post('/product-images/signature', (req, res, next) => {
 router.post('/products', async (req, res, next) => {
   try {
     const { name, description = '' } = req.body;
-    const costPrice = Number(req.body.costPrice);
-    const price = Number(req.body.price);
-    const stock = Number(req.body.stock);
+    const costPrice = parseNonNegativeNumber(req.body.costPrice);
+    const price = parseNonNegativeNumber(req.body.price);
+    const stock = parseNonNegativeNumber(req.body.stock);
     if (typeof name !== 'string' || name.trim().length < 2 || name.trim().length > 160) {
       return res.status(400).json({ error: 'Product name must be between 2 and 160 characters.' });
     }
@@ -212,6 +212,15 @@ function parseProductImages(body, shopId) {
     return { error: 'An image URL is required with the image ID.' };
   }
   return { images };
+}
+
+function parseNonNegativeNumber(value) {
+  if ((typeof value !== 'string' && typeof value !== 'number')
+    || (typeof value === 'string' && !value.trim())) {
+    return Number.NaN;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : Number.NaN;
 }
 
 function isOwnedProductImage(publicId, shopId) {
