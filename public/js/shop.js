@@ -357,9 +357,6 @@
     const imageUrls = values.get('imageUrls').split(/\r?\n/).map((url) => url.trim()).filter(Boolean);
     const wasEditing = Boolean(editingProductId);
     try {
-      if (imageUrls.length + imageFiles.length > 4) {
-        throw new Error('A product can have up to 4 images.');
-      }
       for (const imageUrl of imageUrls) {
         let url;
         try {
@@ -372,7 +369,10 @@
         }
       }
       imageFiles.forEach(validateProductImage);
-      const uploadedImages = await Promise.all(imageFiles.map(uploadProductImage));
+      const uploadedImages = [];
+      for (const file of imageFiles) {
+        uploadedImages.push(await uploadProductImage(file));
+      }
       const images = [
         ...imageUrls.map((imageUrl) => ({
           imageUrl,

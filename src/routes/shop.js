@@ -192,9 +192,7 @@ function parseProductImages(body, shopId) {
   const requestedImages = Object.hasOwn(body, 'images')
     ? body.images
     : (body.imageUrl ? [{ imageUrl: body.imageUrl, imagePublicId: body.imagePublicId || '' }] : []);
-  if (!Array.isArray(requestedImages) || requestedImages.length > 4) {
-    return { error: 'A product can have up to 4 images.' };
-  }
+  if (!Array.isArray(requestedImages)) return { error: 'Product images must be provided as a list.' };
   const images = [];
   for (const image of requestedImages) {
     const imagePublicId = image?.imagePublicId ?? '';
