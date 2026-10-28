@@ -371,7 +371,6 @@
           throw new Error('Each image URL must be a valid HTTP or HTTPS URL.');
         }
       }
-      imageFiles.forEach(validateProductImage);
       for (const file of imageFiles) {
         uploadedImages.push(await uploadProductImage(file));
       }
@@ -410,15 +409,7 @@
   });
 
   document.querySelector('[name="imageFiles"]').addEventListener('change', (event) => {
-    try {
-      const files = [...event.currentTarget.files];
-      files.forEach(validateProductImage);
-      updateImagePreviews();
-    } catch (error) {
-      event.currentTarget.value = '';
-      hideImagePreview();
-      POS.showNotice(document.getElementById('product-message'), error.message, 'error');
-    }
+    updateImagePreviews();
   });
 
   document.querySelector('[name="imageUrls"]').addEventListener('input', () => {
@@ -521,38 +512,50 @@
 
   async function uploadProductImage(file) {
     try {
+      const uploadFilename = sanitizeUploadFilename(file.name);
       const signature = await POS.api('/shop/product-images/signature', {
-        method: 'POST',
-        body: JSON.stringify({ mimeType: file.type })
+        method: 'POST'
       });
       const body = new FormData();
-      body.append('file', file, file.name);
+      body.append('file', file, uploadFilename);
       body.append('api_key', signature.apiKey);
       body.append('timestamp', signature.timestamp);
       body.append('folder', signature.folder);
       body.append('public_id', signature.public_id);
       body.append('signature', signature.signature);
-      const response = await fetch(`https://api.cloudinary.com/v1_1/${encodeURIComponent(signature.cloudName)}/image/upload`, {
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${encodeURIComponent(signature.cloudName)}/auto/upload`, {
         method: 'POST',
         body
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(result.error?.message || `Cloudinary rejected the upload (HTTP ${response.status}).`);
+        const cloudinaryMessage = result.error?.message;
+        throw new Error(cloudinaryMessage
+          ? `Cloudinary rejected the image (HTTP ${response.status}): ${cloudinaryMessage}`
+          : `Cloudinary rejected the image (HTTP ${response.status}).`);
+      }
+      if (result.resource_type !== 'image') {
+        throw new Error(`Cloudinary classified this file as "${result.resource_type || 'unknown'}", not an image.`);
       }
       if (!result.secure_url || !result.public_id) {
         throw new Error('Cloudinary accepted the request but did not return an image URL and ID.');
       }
       return { imageUrl: result.secure_url, imagePublicId: result.public_id };
     } catch (error) {
-      throw new Error(`Unable to upload "${file.name}": ${error.message}`);
+      throw new Error(`Unable to upload "${file.name}": ${error.message || 'Unknown upload error.'}`);
     }
   }
 
-  function validateProductImage(file) {
-    if (!file.type.startsWith('image/')) {
-      throw new Error(`"${file.name}" is not recognized as an image file.`);
-    }
+  function sanitizeUploadFilename(filename) {
+    const baseName = String(filename || 'product-image')
+      .split(/[\\/]/)
+      .pop()
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9._-]/g, '_')
+      .replace(/^\.+/, '')
+      .slice(0, 120);
+    return baseName || 'product-image';
   }
 
   function showImagePreview(src, fileName) {
