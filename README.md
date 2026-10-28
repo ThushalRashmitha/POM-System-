@@ -33,7 +33,7 @@ server.js
 
 The server creates the platform administrator in the Firestore `users` collection on first start. It also uses a `userEmails` collection to enforce unique account emails. Products, invoices, and registration invite codes are stored in `products`, `invoices`, and `invite_codes`. The Firestore Admin SDK runs only on the server and bypasses Firestore client security rules; do not expose its service-account key to browser code.
 
-Products can have as many images as the Firestore product document supports. Shops can enter HTTP(S) image URLs (one per line), upload image files supported by Cloudinary directly, or use both; images are optional, and the marketplace displays the first photo on product cards with a gallery in product details. Files upload individually as multipart data; only the resulting image URLs and Cloudinary IDs are stored in Firestore, not Base64 file content. Existing single-image product records remain supported. Cloudinary upload and Firestore document-size limits still apply. Set `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` from your Cloudinary dashboard to enable uploads; shops can still use existing HTTP(S) image URLs.
+Product image URLs can point to an existing HTTP(S) image. Uploaded PNG, JPG, and WebP images up to 2 MB are stored in Cloudinary, and the returned secure URL is saved in the Firestore product document. Set `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` from your Cloudinary dashboard to enable uploads; shops can still use existing HTTP(S) image URLs.
 
 ## Deploy on Vercel
 

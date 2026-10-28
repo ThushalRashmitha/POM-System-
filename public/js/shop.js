@@ -11,19 +11,14 @@
   let invoices = [];
   let cart = new Map();
   let editingProductId = null;
-  let originalImages = [];
-  let previewObjectUrls = [];
-  let amountsHidden = true;
+  let originalImageUrl = '';
   let toastTimer;
   let shopProfile = { businessName: 'APEX-R POS System', whatsapp: '' };
 
   document.querySelectorAll('[data-logout]').forEach((button) => button.addEventListener('click', () => {
     POS.signOut().catch((error) => notify(error.message));
   }));
-  document.getElementById('privacy-toggle').addEventListener('click', () => {
-    amountsHidden = !amountsHidden;
-    updatePrivacyDisplay();
-  });
+  document.getElementById('share-marketplace').addEventListener('click', shareMarketplace);
   document.querySelectorAll('[data-panel]').forEach((button) => button.addEventListener('click', () => openPanel(button.dataset.panel)));
   document.querySelectorAll('[data-open-panel]').forEach((button) => button.addEventListener('click', () => openPanel(button.dataset.openPanel)));
   document.querySelectorAll('[data-report]').forEach((button) => button.addEventListener('click', () => openReport(button.dataset.report)));
@@ -48,6 +43,22 @@
     toastTimer = setTimeout(() => toast.classList.add('hidden'), 3400);
   }
 
+  async function shareMarketplace() {
+    const shareUrl = document.getElementById('marketplace-share-link').href;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: `${shopProfile.businessName} marketplace`, url: shareUrl });
+      } else if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(shareUrl);
+        notify('Marketplace link copied. Share it with your customers.');
+      } else {
+        throw new Error('Sharing is not available in this browser.');
+      }
+    } catch (error) {
+      if (error.name !== 'AbortError') notify(error.message || 'Unable to share the marketplace link.');
+    }
+  }
+
   function availability(product) {
     if (!product.available) return '<span class="stock-badge stock-none">Hidden</span>';
     if (product.stock < 1) return '<span class="stock-badge stock-none">Out of stock</span>';
@@ -58,13 +69,8 @@
   function renderProducts() {
     productsTable.innerHTML = products.map((product) => {
       const name = POS.escapeHtml(product.name);
-      const costPrice = hasCostPrice(product) ? Number(product.costPrice) : null;
-      const unitProfit = costPrice === null ? null : Number(product.price) - costPrice;
       return `<tr>
-        <td class="table-title">${name}</td>
-        <td>${costPrice === null ? '<span class="missing-cost">Add CP</span>' : privateAmountMarkup(costPrice)}</td>
-        <td>${privateAmountMarkup(product.price)}</td>
-        <td>${unitProfit === null ? '—' : privateAmountMarkup(unitProfit)}</td>
+        <td class="table-title">${name}</td><td>${POS.formatCurrency(product.price)}</td>
         <td>${product.stock}</td><td>${availability(product)}</td>
         <td><div class="actions">
           <button class="button button-quiet button-small" data-product-edit="${product._id}">Edit</button>
@@ -72,30 +78,19 @@
           <button class="button button-danger button-small" data-product-delete="${product._id}" aria-label="Delete ${name}"><i class="fa-solid fa-trash"></i></button>
         </div></td>
       </tr>`;
-    }).join('') || '<tr><td colspan="7">No products yet. Add a product above.</td></tr>';
+    }).join('') || '<tr><td colspan="5">No products yet. Add a product above.</td></tr>';
 
     overviewProducts.innerHTML = products.slice(0, 8).map((product) =>
-      `<tr><td class="table-title">${POS.escapeHtml(product.name)}</td><td>${privateAmountMarkup(product.price)}</td><td>${product.stock}</td><td>${availability(product)}</td></tr>`
+      `<tr><td class="table-title">${POS.escapeHtml(product.name)}</td><td>${POS.formatCurrency(product.price)}</td><td>${product.stock}</td><td>${availability(product)}</td></tr>`
     ).join('') || '<tr><td colspan="4">Add products to see them here.</td></tr>';
 
     const low = products.filter((product) => product.stock <= 7);
     lowStockProducts.innerHTML = low.map((product) =>
-      `<tr><td class="table-title">${POS.escapeHtml(product.name)}</td><td class="stock-low-value">${product.stock}</td><td>${privateAmountMarkup(product.price)}</td></tr>`
+      `<tr><td class="table-title">${POS.escapeHtml(product.name)}</td><td class="stock-low-value">${product.stock}</td><td>${POS.formatCurrency(product.price)}</td></tr>`
     ).join('') || '<tr><td colspan="3">No low-stock products.</td></tr>';
 
     document.getElementById('stat-products').textContent = products.length;
     document.getElementById('stat-low-stock').textContent = low.length;
-    const stockValue = products.reduce((total, product) =>
-      total + (Number(product.price) || 0) * (Number(product.stock) || 0), 0);
-    const knownCostProducts = products.filter(hasCostPrice);
-    const stockCostValue = knownCostProducts.reduce((total, product) =>
-      total + Number(product.costPrice) * (Number(product.stock) || 0), 0);
-    const stockProfit = knownCostProducts.reduce((total, product) =>
-      total + (Number(product.price) - Number(product.costPrice)) * (Number(product.stock) || 0), 0);
-    setPrivateAmount(document.getElementById('stat-stock-value'), stockValue);
-    setPrivateAmount(document.getElementById('stat-stock-cost-value'), stockCostValue);
-    setPrivateAmount(document.getElementById('stat-stock-profit'), stockProfit);
-    updatePrivacyDisplay();
     renderPosProducts();
     renderCart();
   }
@@ -107,9 +102,8 @@
       const stock = product.stock > 0
         ? `<span class="pos-stock">${product.stock} in stock</span>`
         : '<span class="pos-stock out-of-stock">Out of stock</span>';
-      const imageUrl = product.images?.[0]?.imageUrl || product.imageUrl;
-      const image = imageUrl
-        ? `<img src="${POS.escapeHtml(imageUrl)}" alt="" loading="lazy" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span class="pos-placeholder" hidden><i class="fa-solid fa-box"></i></span>`
+      const image = product.imageUrl
+        ? `<img src="${POS.escapeHtml(product.imageUrl)}" alt="" loading="lazy" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span class="pos-placeholder" hidden><i class="fa-solid fa-box"></i></span>`
         : '<span class="pos-placeholder"><i class="fa-solid fa-box"></i></span>';
       const disabled = !product.available || product.stock < 1;
       return `<button class="pos-product ${disabled ? 'unavailable' : ''}" data-pos-add="${product._id}" ${disabled ? 'disabled' : ''}>
@@ -172,17 +166,14 @@
       const items = invoice.items.map((item) => `${POS.escapeHtml(item.name)} × ${item.quantity}`).join(', ');
       return `<tr><td class="table-title">${POS.escapeHtml(invoice.invoiceNumber)}</td>
         <td>${POS.escapeHtml(POS.formatDate(invoice.soldAt))}</td><td>${items}</td>
-        <td class="table-title">${privateAmountMarkup(invoice.total)}</td>
-        <td class="table-title">${invoice.grossProfit === null || invoice.grossProfit === undefined
-    ? '<span class="missing-cost">CP not recorded</span>' : privateAmountMarkup(invoice.grossProfit)}</td>
+        <td class="table-title">${POS.formatCurrency(invoice.total)}</td>
         <td><div class="actions">
           <button class="button button-quiet button-small" data-invoice-view="${invoice._id}" title="View receipt"><i class="fa-regular fa-eye"></i></button>
           <button class="button button-quiet button-small" data-invoice-print="${invoice._id}" title="Print receipt"><i class="fa-solid fa-print"></i></button>
           <button class="button button-danger button-small" data-invoice-delete="${invoice._id}" title="Delete invoice and report"><i class="fa-solid fa-trash"></i></button>
         </div></td></tr>`;
-    }).join('') || '<tr><td colspan="6">No invoices found for this period.</td></tr>';
+    }).join('') || '<tr><td colspan="5">No invoices found for this period.</td></tr>';
     renderReports();
-    updatePrivacyDisplay();
   }
 
   function renderReports() {
@@ -192,18 +183,13 @@
     const todayInvoices = invoices.filter((invoice) => localDateKey(new Date(invoice.soldAt)) === todayKey);
     const monthInvoices = invoices.filter((invoice) => localDateKey(new Date(invoice.soldAt)).startsWith(monthKey));
     const sum = (list) => list.reduce((total, invoice) => total + invoice.total, 0);
-    const profitSum = (list) => list.reduce((total, invoice) =>
-      total + (Number.isFinite(invoice.grossProfit) ? invoice.grossProfit : 0), 0);
     document.getElementById('stat-bills-today').textContent = todayInvoices.length;
     document.getElementById('stat-bills-month').textContent = monthInvoices.length;
-    setPrivateAmount(document.getElementById('stat-income-today'), sum(todayInvoices));
-    setPrivateAmount(document.getElementById('stat-income-month'), sum(monthInvoices));
-    setPrivateAmount(document.getElementById('report-today'), sum(todayInvoices));
-    setPrivateAmount(document.getElementById('report-month'), sum(monthInvoices));
-    setPrivateAmount(document.getElementById('report-total'), sum(invoices));
-    setPrivateAmount(document.getElementById('report-profit-today'), profitSum(todayInvoices));
-    setPrivateAmount(document.getElementById('report-profit-month'), profitSum(monthInvoices));
-    setPrivateAmount(document.getElementById('report-profit-total'), profitSum(invoices));
+    document.getElementById('stat-income-today').textContent = POS.formatCurrency(sum(todayInvoices));
+    document.getElementById('stat-income-month').textContent = POS.formatCurrency(sum(monthInvoices));
+    document.getElementById('report-today').textContent = POS.formatCurrency(sum(todayInvoices));
+    document.getElementById('report-month').textContent = POS.formatCurrency(sum(monthInvoices));
+    document.getElementById('report-total').textContent = POS.formatCurrency(sum(invoices));
 
     const sales = new Map();
     invoices.forEach((invoice) => invoice.items.forEach((item) => {
@@ -213,36 +199,9 @@
       sales.set(item.name, previous);
     }));
     const rows = [...sales.entries()].sort((a, b) => b[1].revenue - a[1].revenue).map(([name, values]) =>
-      `<tr><td class="table-title">${POS.escapeHtml(name)}</td><td>${values.quantity}</td><td class="table-title">${privateAmountMarkup(values.revenue)}</td></tr>`
+      `<tr><td class="table-title">${POS.escapeHtml(name)}</td><td>${values.quantity}</td><td class="table-title">${POS.formatCurrency(values.revenue)}</td></tr>`
     ).join('');
     document.getElementById('product-sales-table').innerHTML = rows || '<tr><td colspan="3">No product sales recorded yet.</td></tr>';
-    updatePrivacyDisplay();
-  }
-
-  function hasCostPrice(product) {
-    return product.costPrice !== undefined && product.costPrice !== null
-      && Number.isFinite(Number(product.costPrice));
-  }
-
-  function privateAmountMarkup(amount) {
-    const visibleAmount = POS.formatCurrency(amount);
-    return `<span data-private-amount data-visible-amount="${POS.escapeHtml(visibleAmount)}">${amountsHidden ? '••••••' : visibleAmount}</span>`;
-  }
-
-  function setPrivateAmount(element, amount) {
-    element.dataset.visibleAmount = POS.formatCurrency(amount);
-    element.dataset.privateAmount = '';
-    element.textContent = amountsHidden ? '••••••' : element.dataset.visibleAmount;
-  }
-
-  function updatePrivacyDisplay() {
-    document.querySelectorAll('[data-private-amount]').forEach((element) => {
-      element.textContent = amountsHidden ? '••••••' : element.dataset.visibleAmount;
-    });
-    const toggle = document.getElementById('privacy-toggle');
-    toggle.setAttribute('aria-pressed', String(!amountsHidden));
-    toggle.setAttribute('aria-label', `${amountsHidden ? 'Show' : 'Hide'} sensitive amounts`);
-    toggle.innerHTML = `<i class="fa-solid ${amountsHidden ? 'fa-eye-slash' : 'fa-eye'}" aria-hidden="true"></i> ${amountsHidden ? 'Show' : 'Hide'} amounts`;
   }
 
   function localDateKey(date) {
@@ -271,13 +230,12 @@
     const rows = filteredInvoices();
     const escapeCsv = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
     const csv = [
-      ['Invoice number', 'Date', 'Items', 'Total', 'Gross profit'],
+      ['Invoice number', 'Date', 'Items', 'Total'],
       ...rows.map((invoice) => [
         invoice.invoiceNumber,
         new Date(invoice.soldAt).toISOString(),
         invoice.items.map((item) => `${item.name} x ${item.quantity}`).join('; '),
-        invoice.total,
-        invoice.grossProfit ?? ''
+        invoice.total
       ])
     ].map((row) => row.map(escapeCsv).join(',')).join('\r\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -353,49 +311,24 @@
     event.preventDefault();
     const form = event.currentTarget;
     const values = new FormData(form);
-    const imageFiles = [...values.getAll('imageFiles')].filter((file) => file.size > 0);
-    const imageUrls = values.get('imageUrls').split(/\r?\n/).map((url) => url.trim()).filter(Boolean);
+    const imageFile = values.get('imageFile');
     const wasEditing = Boolean(editingProductId);
-    const saveButton = document.getElementById('product-save-button');
-    const uploadedImages = [];
-    saveButton.disabled = true;
     try {
-      for (const imageUrl of imageUrls) {
-        let url;
-        try {
-          url = new URL(imageUrl);
-        } catch {
-          throw new Error('Each image URL must be a valid HTTP or HTTPS URL.');
-        }
-        if (!['http:', 'https:'].includes(url.protocol)) {
-          throw new Error('Each image URL must be a valid HTTP or HTTPS URL.');
-        }
-      }
-      for (const file of imageFiles) {
-        uploadedImages.push(await uploadProductImage(file));
-      }
-      const images = [
-        ...imageUrls.map((imageUrl) => ({
-          imageUrl,
-          imagePublicId: originalImages.find((image) => image.imageUrl === imageUrl)?.imagePublicId || ''
-        })),
-        ...uploadedImages
-      ];
+      const imageUrl = imageFile.size
+        ? await readProductImage(imageFile)
+        : (values.get('imageUrl') || (editingProductId && originalImageUrl.startsWith('data:image/')
+          ? originalImageUrl : ''));
       const payload = {
         name: values.get('name'), description: values.get('description'),
-        costPrice: Number(values.get('costPrice')),
-        price: Number(values.get('price')),
-        stock: Number(values.get('stock')),
-        images
+        price: values.get('price'), stock: values.get('stock')
       };
-      try {
-        await POS.api(editingProductId ? `/shop/products/${editingProductId}` : '/shop/products', {
-          method: editingProductId ? 'PATCH' : 'POST',
-          body: JSON.stringify(payload)
-        });
-      } catch (error) {
-        throw new Error(`Images uploaded, but the product could not be saved: ${error.message}`);
+      if (!wasEditing || imageFile.size || values.get('imageUrl') || !originalImageUrl.startsWith('data:image/')) {
+        payload.imageUrl = imageUrl;
       }
+      await POS.api(editingProductId ? `/shop/products/${editingProductId}` : '/shop/products', {
+        method: editingProductId ? 'PATCH' : 'POST',
+        body: JSON.stringify(payload)
+      });
       form.reset();
       hideImagePreview();
       resetProductEdit();
@@ -403,17 +336,28 @@
       notify(wasEditing ? 'Product updated.' : 'Product added to your inventory.');
     } catch (error) {
       POS.showNotice(document.getElementById('product-message'), error.message, 'error');
-    } finally {
-      saveButton.disabled = false;
     }
   });
 
-  document.querySelector('[name="imageFiles"]').addEventListener('change', (event) => {
-    updateImagePreviews();
+  document.querySelector('[name="imageFile"]').addEventListener('change', async (event) => {
+    const file = event.currentTarget.files[0];
+    if (!file) return hideImagePreview();
+    try {
+      const imageUrl = await readProductImage(file);
+      showImagePreview(imageUrl, file.name);
+    } catch (error) {
+      event.currentTarget.value = '';
+      hideImagePreview();
+      POS.showNotice(document.getElementById('product-message'), error.message, 'error');
+    }
   });
 
-  document.querySelector('[name="imageUrls"]').addEventListener('input', () => {
-    updateImagePreviews();
+  document.querySelector('[name="imageUrl"]').addEventListener('input', (event) => {
+    if (!document.querySelector('[name="imageFile"]').files.length && event.currentTarget.value) {
+      showImagePreview(event.currentTarget.value, 'Image URL preview');
+    } else if (!document.querySelector('[name="imageFile"]').files.length) {
+      hideImagePreview();
+    }
   });
 
   productsTable.addEventListener('click', async (event) => {
@@ -426,17 +370,13 @@
         if (!product) return;
         editingProductId = product._id;
         const form = document.getElementById('product-form');
-        for (const field of ['name', 'description', 'costPrice', 'price', 'stock']) {
+        for (const field of ['name', 'description', 'price', 'stock']) {
           form.elements.namedItem(field).value = product[field] ?? '';
         }
-        originalImages = Array.isArray(product.images) && product.images.length
-          ? product.images
-          : (product.imageUrl ? [{ imageUrl: product.imageUrl, imagePublicId: product.imagePublicId || '' }] : []);
-        form.elements.namedItem('imageUrls').value = originalImages
-          .map((image) => image.imageUrl)
-          .filter((imageUrl) => imageUrl && !imageUrl.startsWith('data:image/'))
-          .join('\n');
-        updateImagePreviews();
+        originalImageUrl = product.imageUrl || '';
+        form.elements.namedItem('imageUrl').value = originalImageUrl.startsWith('data:image/') ? '' : originalImageUrl;
+        if (product.imageUrl) showImagePreview(product.imageUrl, 'Current product image');
+        else hideImagePreview();
         document.getElementById('product-form-title').textContent = `Edit ${product.name}`;
         document.getElementById('product-save-button').textContent = 'Save changes';
         document.getElementById('product-cancel-edit').classList.remove('hidden');
@@ -498,7 +438,7 @@
 
   function resetProductEdit() {
     editingProductId = null;
-    originalImages = [];
+    originalImageUrl = '';
     document.getElementById('product-form-title').textContent = 'Add a product';
     document.getElementById('product-save-button').textContent = 'Add product';
     document.getElementById('product-cancel-edit').classList.add('hidden');
@@ -510,87 +450,33 @@
     resetProductEdit();
   });
 
-  async function uploadProductImage(file) {
-    try {
-      const uploadFilename = sanitizeUploadFilename(file.name);
-      const signature = await POS.api('/shop/product-images/signature', {
-        method: 'POST'
-      });
-      const body = new FormData();
-      body.append('file', file, uploadFilename);
-      body.append('api_key', signature.apiKey);
-      body.append('timestamp', signature.timestamp);
-      body.append('folder', signature.folder);
-      body.append('public_id', signature.public_id);
-      body.append('signature', signature.signature);
-      const response = await fetch(`https://api.cloudinary.com/v1_1/${encodeURIComponent(signature.cloudName)}/auto/upload`, {
-        method: 'POST',
-        body
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        const cloudinaryMessage = result.error?.message;
-        throw new Error(cloudinaryMessage
-          ? `Cloudinary rejected the image (HTTP ${response.status}): ${cloudinaryMessage}`
-          : `Cloudinary rejected the image (HTTP ${response.status}).`);
-      }
-      if (result.resource_type !== 'image') {
-        throw new Error(`Cloudinary classified this file as "${result.resource_type || 'unknown'}", not an image.`);
-      }
-      if (!result.secure_url || !result.public_id) {
-        throw new Error('Cloudinary accepted the request but did not return an image URL and ID.');
-      }
-      return { imageUrl: result.secure_url, imagePublicId: result.public_id };
-    } catch (error) {
-      throw new Error(`Unable to upload "${file.name}": ${error.message || 'Unknown upload error.'}`);
+  function readProductImage(file) {
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      return Promise.reject(new Error('Choose a PNG, JPG, or WebP image.'));
     }
-  }
-
-  function sanitizeUploadFilename(filename) {
-    const baseName = String(filename || 'product-image')
-      .split(/[\\/]/)
-      .pop()
-      .normalize('NFKD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-zA-Z0-9._-]/g, '_')
-      .replace(/^\.+/, '')
-      .slice(0, 120);
-    return baseName || 'product-image';
+    if (file.size > 2 * 1024 * 1024) {
+      return Promise.reject(new Error('The image must be 2 MB or smaller.'));
+    }
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.addEventListener('load', () => resolve(reader.result));
+      reader.addEventListener('error', () => reject(new Error('Unable to read the selected image. Please try again.')));
+      reader.readAsDataURL(file);
+    });
   }
 
   function showImagePreview(src, fileName) {
-    const preview = document.createElement('div');
-    preview.className = 'image-preview';
-    const image = document.createElement('img');
+    const image = document.getElementById('product-image-preview');
     image.src = src;
-    image.alt = fileName;
-    const label = document.createElement('span');
-    label.textContent = fileName;
-    preview.append(image, label);
-    document.getElementById('product-image-preview-wrap').append(preview);
-  }
-
-  function updateImagePreviews() {
-    hideImagePreview();
-    const urlText = document.querySelector('[name="imageUrls"]').value;
-    const imageUrls = urlText.split(/\r?\n/).map((url) => url.trim()).filter(Boolean);
-    imageUrls.forEach((imageUrl, index) => showImagePreview(imageUrl, `Image URL ${index + 1}`));
-    for (const file of document.querySelector('[name="imageFiles"]').files) {
-      const objectUrl = URL.createObjectURL(file);
-      previewObjectUrls.push(objectUrl);
-      showImagePreview(objectUrl, file.name);
-    }
-    if (document.getElementById('product-image-preview-wrap').childElementCount) {
-      document.getElementById('product-image-preview-wrap').classList.remove('hidden');
-    }
+    document.getElementById('product-image-file-name').textContent = fileName;
+    document.getElementById('product-image-preview-wrap').classList.remove('hidden');
   }
 
   function hideImagePreview() {
-    previewObjectUrls.forEach((url) => URL.revokeObjectURL(url));
-    previewObjectUrls = [];
-    const preview = document.getElementById('product-image-preview-wrap');
-    preview.classList.add('hidden');
-    preview.replaceChildren();
+    document.getElementById('product-image-preview-wrap').classList.add('hidden');
+    document.getElementById('product-image-preview').removeAttribute('src');
+    document.getElementById('product-image-file-name').textContent = '';
   }
 
   async function start() {
@@ -606,8 +492,9 @@
       document.getElementById('shop-header-name').textContent = businessName;
       document.getElementById('shop-sidebar-name').textContent = businessName;
       document.getElementById('shop-email').textContent = result.user.email;
-      document.getElementById('marketplace-link').href =
+      document.getElementById('marketplace-share-link').href =
         `/marketplace.html?shop=${encodeURIComponent(result.user.id)}`;
+      document.getElementById('share-marketplace').disabled = false;
       await refreshData();
     } catch {
       window.location.assign('/login.html');

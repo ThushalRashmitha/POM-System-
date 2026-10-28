@@ -15,8 +15,6 @@
 .sidebar-nav .side-link{min-height:48px;padding:0 14px;font-size:14px}
 .workspace{max-width:1500px}
 .panel .page-heading h1{font-size:28px}
-.privacy-toggle{flex:none}
-.missing-cost{color:#a46b10;font-weight:700}
 .sale-form-stacked{display:grid;gap:15px;padding-bottom:21px}
 .sale-lines{display:grid;gap:10px;padding:0 21px}
 .sale-line{display:grid;grid-template-columns:minmax(0,1fr) 130px 40px;gap:10px;align-items:end}
@@ -27,10 +25,8 @@
 .sale-actions{display:flex;justify-content:space-between;gap:10px;padding:0 21px}
 .sale-actions button:disabled{opacity:.5;cursor:not-allowed}
 .form-actions{display:flex;align-items:center;gap:9px}
-.image-preview-wrap{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:10px;color:#788194;font-size:11px}
-.image-preview{display:grid;gap:5px;min-width:0}
-.image-preview img{width:100%;height:78px;object-fit:cover;border:1px solid var(--line);border-radius:9px}
-.image-preview span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.image-preview-wrap{display:flex;align-items:center;gap:12px;color:#788194;font-size:12px}
+.image-preview-wrap img{width:86px;height:72px;object-fit:cover;border:1px solid var(--line);border-radius:9px}
 .pos-layout{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(320px,.85fr);gap:18px;align-items:start}
 .pos-catalog{padding:16px}
 .pos-search{height:42px;display:flex;align-items:center;gap:10px;padding:0 12px;background:#f7f8fc;border:1px solid #e8eaf1;border-radius:9px;margin-bottom:15px;color:#8a92a2}

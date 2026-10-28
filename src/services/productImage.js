@@ -1,44 +1,41 @@
-const cloudinary = require('cloudinary').v2;
-const { randomUUID } = require('node:crypto');
+const MAX_IMAGE_BYTES = 2 * 1024 * 1024; // 2 MB
 
-function getCloudinaryConfig() {
-  const { CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET } = process.env;
-  if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_API_KEY || !CLOUDINARY_API_SECRET) {
-    const error = new Error('Product image uploads are not configured.');
-    error.status = 503;
-    throw error;
+function normalizeImageSource(source, mimeType) {
+  if (typeof source === 'string') {
+    if (source.startsWith('data:image/')) return source;
+    throw new Error('Product image data is invalid.');
   }
 
-  cloudinary.config({
-    cloud_name: CLOUDINARY_CLOUD_NAME,
-    api_key: CLOUDINARY_API_KEY,
-    api_secret: CLOUDINARY_API_SECRET
-  });
-  return { cloudName: CLOUDINARY_CLOUD_NAME, apiKey: CLOUDINARY_API_KEY, apiSecret: CLOUDINARY_API_SECRET };
+  const buffer = Buffer.isBuffer(source)
+    ? source
+    : source && typeof source === 'object' && ArrayBuffer.isView(source)
+      ? Buffer.from(source.buffer.slice(source.byteOffset, source.byteOffset + source.byteLength))
+      : source && source.buffer instanceof ArrayBuffer
+        ? Buffer.from(source.buffer)
+        : null;
+
+  if (!buffer || !buffer.length) {
+    throw new Error('Product image data is invalid.');
+  }
+
+  const resolvedMimeType = mimeType || 'image/jpeg';
+  return `data:${resolvedMimeType};base64,${buffer.toString('base64')}`;
 }
 
-function createProductImageUploadSignature(shopId) {
-  const { cloudName, apiKey, apiSecret } = getCloudinaryConfig();
-  const timestamp = Math.floor(Date.now() / 1000);
-  const folder = `products/${shopId}`;
-  const publicId = randomUUID();
-  const parameters = { folder, public_id: publicId, timestamp };
+async function saveProductImage(shopId, imageSource, mimeType) {
+  const dataUrl = normalizeImageSource(imageSource, mimeType);
+  
+  const base64Data = dataUrl.split(',')[1];
+  const buffer = Buffer.from(base64Data, 'base64');
+  if (buffer.length > MAX_IMAGE_BYTES) {
+    throw new Error('Product image must be no larger than 2 MB.');
+  }
 
-  return {
-    cloudName,
-    apiKey,
-    ...parameters,
-    signature: cloudinary.utils.api_sign_request(parameters, apiSecret)
-  };
+  return { imageUrl: dataUrl, imagePublicId: null };
 }
 
 async function removeProductImage(publicId) {
-  if (!publicId) return;
-  getCloudinaryConfig();
-  const result = await cloudinary.uploader.destroy(publicId);
-  if (result.result !== 'ok' && result.result !== 'not found') {
-    throw new Error(`Unable to remove product image "${publicId}".`);
-  }
+  return;
 }
 
-module.exports = { createProductImageUploadSignature, removeProductImage };
+module.exports = { removeProductImage, saveProductImage };

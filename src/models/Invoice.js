@@ -58,8 +58,6 @@ async function checkout(shopId, requestedItems, invoiceNumber) {
 
     const invoiceItems = [];
     let total = 0;
-    let grossProfit = 0;
-    let allItemsHaveCostPrice = true;
     for (let index = 0; index < productSnapshots.length; index += 1) {
       const snapshot = productSnapshots[index];
       const product = snapshot.exists ? snapshot.data() : null;
@@ -69,18 +67,12 @@ async function checkout(shopId, requestedItems, invoiceNumber) {
       }
       const amount = product.price * quantity;
       total += amount;
-      const unitCost = Number.isFinite(product.costPrice) ? product.costPrice : null;
-      const itemProfit = unitCost === null ? null : (product.price - unitCost) * quantity;
-      if (itemProfit === null) allItemsHaveCostPrice = false;
-      else grossProfit += itemProfit;
       invoiceItems.push({
         product: snapshot.id,
         name: product.name,
         quantity,
-        unitCost,
         unitPrice: product.price,
-        amount,
-        profit: itemProfit
+        amount
       });
       transaction.update(productRefs[index], {
         stock: product.stock - quantity,
@@ -94,7 +86,6 @@ async function checkout(shopId, requestedItems, invoiceNumber) {
       invoiceNumber,
       items: invoiceItems,
       total,
-      grossProfit: allItemsHaveCostPrice ? grossProfit : null,
       soldAt: now,
       createdAt: now,
       updatedAt: now
