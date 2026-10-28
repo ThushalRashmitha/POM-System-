@@ -14,8 +14,9 @@
       return;
     }
     grid.innerHTML = products.map((product) => {
-      const image = product.imageUrl
-        ? `<img class="market-image" src="${POS.escapeHtml(product.imageUrl)}" alt="${POS.escapeHtml(product.name)}" loading="lazy">`
+      const imageUrl = product.images?.[0]?.imageUrl || product.imageUrl;
+      const image = imageUrl
+        ? `<img class="market-image" src="${POS.escapeHtml(imageUrl)}" alt="${POS.escapeHtml(product.name)}" loading="lazy">`
         : '<div class="market-image-placeholder"><i class="fa-solid fa-box-open"></i></div>';
       const stock = product.inStock
         ? `<span class="availability in-stock"><i class="fa-solid fa-circle-check"></i> In stock · ${product.stock}</span>`
@@ -53,12 +54,20 @@
     try {
       const shopQuery = shopId ? `?shop=${encodeURIComponent(shopId)}` : '';
       const { product } = await POS.api(`/marketplace/products/${encodeURIComponent(id)}${shopQuery}`);
-      const image = product.imageUrl
-        ? `<img class="detail-image" src="${POS.escapeHtml(product.imageUrl)}" alt="${POS.escapeHtml(product.name)}">`
+      const images = Array.isArray(product.images) && product.images.length
+        ? product.images
+        : (product.imageUrl ? [{ imageUrl: product.imageUrl }] : []);
+      const imageGallery = images.length
+        ? `<img class="detail-image" data-gallery-main src="${POS.escapeHtml(images[0].imageUrl)}" alt="${POS.escapeHtml(product.name)}">
+          ${images.length > 1 ? `<div class="detail-thumbnails" aria-label="More product photos">${images.map((image, index) =>
+            `<button class="detail-thumbnail ${index === 0 ? 'active' : ''}" type="button" data-gallery-image="${POS.escapeHtml(image.imageUrl)}" aria-label="View product photo ${index + 1}" aria-pressed="${index === 0}">
+              <img src="${POS.escapeHtml(image.imageUrl)}" alt="" loading="lazy">
+            </button>`
+          ).join('')}</div>` : ''}`
         : '<div class="market-image-placeholder detail-image"><i class="fa-solid fa-box-open"></i></div>';
       const inStock = product.stock > 0;
       const whatsapp = String(product.shop.whatsapp || '').replace(/[^\d]/g, '');
-      detail.innerHTML = `${image}<p class="detail-shop">SOLD BY ${POS.escapeHtml(product.shop.businessName)}</p>
+      detail.innerHTML = `${imageGallery}<p class="detail-shop">SOLD BY ${POS.escapeHtml(product.shop.businessName)}</p>
         <h2>${POS.escapeHtml(product.name)}</h2><p class="detail-price">${POS.formatCurrency(product.price)}</p>
         <p class="detail-description">${POS.escapeHtml(product.description || 'Ask the shop for more information about this product.')}</p>
         <p class="detail-stock ${inStock ? 'availability in-stock' : 'availability out-stock'}">${inStock ? `Available now · ${product.stock} in stock` : 'Currently out of stock'}</p>
@@ -114,6 +123,16 @@
     }
   });
   document.getElementById('close-dialog').addEventListener('click', () => dialog.close());
+  detail.addEventListener('click', (event) => {
+    const thumbnail = event.target.closest('[data-gallery-image]');
+    if (!thumbnail) return;
+    detail.querySelector('[data-gallery-main]').src = thumbnail.dataset.galleryImage;
+    detail.querySelectorAll('[data-gallery-image]').forEach((button) => {
+      const selected = button === thumbnail;
+      button.classList.toggle('active', selected);
+      button.setAttribute('aria-pressed', String(selected));
+    });
+  });
   dialog.addEventListener('click', (event) => {
     if (event.target === dialog) dialog.close();
   });

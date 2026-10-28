@@ -10,7 +10,7 @@
 </head>
 <body class="app-page">
 <header class="app-header">
-  <div class="header-links"><a class="button button-outline" id="marketplace-share-link" href="/marketplace.html" target="_blank">View marketplace <i class="fa-solid fa-arrow-up-right-from-square"></i></a><button class="button button-quiet" id="share-marketplace" type="button" disabled><i class="fa-solid fa-share-nodes"></i> Share link</button><span class="shop-name-header" id="shop-header-name"></span><span class="user-label" id="shop-email"></span><button class="button button-quiet" data-logout>Sign out</button></div>
+  <div class="header-links"><a class="button button-outline" id="marketplace-link" href="/marketplace.html" target="_blank">View marketplace <i class="fa-solid fa-arrow-up-right-from-square"></i></a><span class="shop-name-header" id="shop-header-name"></span><span class="user-label" id="shop-email"></span><button class="button button-quiet" data-logout>Sign out</button></div>
 </header>
 <div class="app-layout">
   <aside class="app-sidebar">
@@ -61,16 +61,16 @@
       <section class="panel" id="panel-inventory">
         <div class="page-heading"><div><span class="eyebrow">INVENTORY</span><h1>Inventory</h1><p>Manage product details, stock, and marketplace availability.</p></div></div>
         <div class="content-card">
-          <div class="card-heading"><div><h2 id="product-form-title">Add a product</h2><p>Set its description, price, photo and quantity.</p></div></div>
+          <div class="card-heading"><div><h2 id="product-form-title">Add a product</h2><p>Set its description, price, photos and quantity.</p></div></div>
           <form id="product-form" class="product-form">
             <label>Product name<input name="name" required minlength="2" maxlength="160" placeholder="Product name"></label>
             <label>Description<input name="description" maxlength="2000" placeholder="Details customers should know"></label>
             <label>Cost Price (CP) (Rs.)<input name="costPrice" type="number" min="0" step="0.01" required placeholder="Purchase price"></label>
             <label>Selling Price (SP) (Rs.)<input name="price" type="number" min="0" step="0.01" required placeholder="Selling price"></label>
             <label>Available stock<input name="stock" type="number" min="0" step="1" required placeholder="0"></label>
-            <label class="form-wide">Image URL <span class="optional-label">(optional)</span><input name="imageUrl" type="url" placeholder="https://example.com/product.jpg"></label>
-            <label class="form-wide">Or choose an image from your computer <span class="optional-label">(PNG, JPG, or WebP)</span><input name="imageFile" type="file" accept="image/png,image/jpeg,image/webp"></label>
-            <div class="form-wide image-preview-wrap hidden" id="product-image-preview-wrap"><img id="product-image-preview" alt="Product image preview"><span id="product-image-file-name"></span></div>
+            <label class="form-wide">Image URLs <span class="optional-label">(optional, one HTTP(S) URL per line; up to 4 images)</span><textarea name="imageUrls" rows="3" placeholder="https://example.com/product-front.jpg"></textarea></label>
+            <label class="form-wide">Or choose images from your computer <span class="optional-label">(PNG, JPG, or WebP; up to 4 images total)</span><input name="imageFiles" type="file" accept="image/png,image/jpeg,image/webp" multiple></label>
+            <div class="form-wide image-preview-wrap hidden" id="product-image-preview-wrap" aria-live="polite"></div>
             <div class="form-actions">
               <button class="button button-primary" id="product-save-button" type="submit">Add product</button>
               <button class="button button-quiet hidden" id="product-cancel-edit" type="button">Cancel edit</button>

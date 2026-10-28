@@ -29,7 +29,7 @@ router.post('/product-images/signature', (req, res, next) => {
 
 router.post('/products', async (req, res, next) => {
   try {
-    const { name, description = '', imageUrl = '', imagePublicId = '' } = req.body;
+    const { name, description = '' } = req.body;
     const costPrice = Number(req.body.costPrice);
     const price = Number(req.body.price);
     const stock = Number(req.body.stock);
@@ -42,20 +42,14 @@ router.post('/products', async (req, res, next) => {
     if (typeof description !== 'string' || description.length > 2000) {
       return res.status(400).json({ error: 'Product description must be 2,000 characters or fewer.' });
     }
-    if (typeof imageUrl !== 'string' || (imageUrl && !isValidProductImage(imageUrl))) {
-      return res.status(400).json({ error: 'Product image must be a valid HTTP or HTTPS URL.' });
-    }
-    if (typeof imagePublicId !== 'string' || (imagePublicId && !isOwnedProductImage(imagePublicId, req.user.id))) {
-      return res.status(400).json({ error: 'Product image is invalid.' });
-    }
+    const parsedImages = parseProductImages(req.body, req.user.id);
+    if (parsedImages.error) return res.status(400).json({ error: parsedImages.error });
 
-    const product = await Product.createProduct({
-      shop: req.user.id,
+    const product = await Product.createProduct(req.user.id, {
       name: name.trim(),
       description: description.trim(),
       costPrice,
-      imageUrl,
-      imagePublicId,
+      images: parsedImages.images,
       price,
       stock
     });
@@ -69,8 +63,15 @@ router.patch('/products/:id', async (req, res, next) => {
   try {
     if (!isValidDocumentId(req.params.id)) return res.status(400).json({ error: 'Invalid product ID.' });
     const updates = {};
-    for (const field of ['name', 'description', 'imageUrl', 'imagePublicId', 'costPrice', 'price', 'stock', 'available']) {
+    for (const field of ['name', 'description', 'images', 'imageUrl', 'imagePublicId', 'costPrice', 'price', 'stock', 'available']) {
       if (Object.hasOwn(req.body, field)) updates[field] = req.body[field];
+    }
+    if (Object.hasOwn(updates, 'images')) {
+      const parsedImages = parseProductImages(req.body, req.user.id);
+      if (parsedImages.error) return res.status(400).json({ error: parsedImages.error });
+      updates.images = parsedImages.images;
+      delete updates.imageUrl;
+      delete updates.imagePublicId;
     }
     if (Object.hasOwn(updates, 'costPrice')) updates.costPrice = Number(updates.costPrice);
     if (Object.hasOwn(updates, 'price')) updates.price = Number(updates.price);
@@ -185,6 +186,32 @@ function isValidHttpUrl(value) {
 function isValidProductImage(value) {
   if (typeof value !== 'string') return false;
   return isValidHttpUrl(value);
+}
+
+function parseProductImages(body, shopId) {
+  const requestedImages = Object.hasOwn(body, 'images')
+    ? body.images
+    : (body.imageUrl ? [{ imageUrl: body.imageUrl, imagePublicId: body.imagePublicId || '' }] : []);
+  if (!Array.isArray(requestedImages) || requestedImages.length > 4) {
+    return { error: 'A product can have up to 4 images.' };
+  }
+  const images = [];
+  for (const image of requestedImages) {
+    const imagePublicId = image?.imagePublicId ?? '';
+    if (!image || typeof image !== 'object' || Array.isArray(image)
+      || !isValidProductImage(image.imageUrl)) {
+      return { error: 'Each product image must have a valid HTTP or HTTPS URL.' };
+    }
+    if (typeof imagePublicId !== 'string'
+      || (imagePublicId && !isOwnedProductImage(imagePublicId, shopId))) {
+      return { error: 'Product image is invalid.' };
+    }
+    images.push({ imageUrl: image.imageUrl, imagePublicId });
+  }
+  if (!Object.hasOwn(body, 'images') && body.imagePublicId && !body.imageUrl) {
+    return { error: 'An image URL is required with the image ID.' };
+  }
+  return { images };
 }
 
 function isOwnedProductImage(publicId, shopId) {
