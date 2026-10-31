@@ -15,6 +15,22 @@ async function listByShop(shopId, limit = 500) {
     .slice(0, limit);
 }
 
+async function historyByShop(shopId, monthStart, nextMonthStart, limit = 500) {
+  const snapshot = await getDatabase().collection(INVOICES)
+    .where('shop', '==', String(shopId)).get();
+  const records = snapshot.docs.map(invoiceFromSnapshot);
+  const monthlyProfitCents = records.reduce((sum, invoice) => {
+    if (invoice.soldAt < monthStart || invoice.soldAt >= nextMonthStart || !Number.isFinite(invoice.profit)) {
+      return sum;
+    }
+    return sum + Math.round(invoice.profit * 100);
+  }, 0);
+  const invoices = records
+    .sort((a, b) => b.soldAt.localeCompare(a.soldAt))
+    .slice(0, limit);
+  return { invoices, monthlyProfit: monthlyProfitCents / 100 };
+}
+
 async function createInvoice(invoice) {
   const ref = getDatabase().collection(INVOICES).doc();
   const now = new Date().toISOString();
@@ -112,4 +128,4 @@ async function checkout(shopId, requestedItems, invoiceNumber) {
   });
 }
 
-module.exports = { checkout, countByShop, createInvoice, deleteByShop, deleteOwned, listByShop };
+module.exports = { checkout, countByShop, createInvoice, deleteByShop, deleteOwned, historyByShop, listByShop };

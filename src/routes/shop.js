@@ -119,7 +119,13 @@ router.delete('/products/:id', async (req, res, next) => {
 
 router.get('/invoices', async (req, res, next) => {
   try {
-    res.json({ invoices: await Invoice.listByShop(req.user.id) });
+    const { monthStart, nextMonthStart } = req.query;
+    if (typeof monthStart !== 'string' || typeof nextMonthStart !== 'string'
+      || !isIsoDate(monthStart) || !isIsoDate(nextMonthStart)
+      || monthStart >= nextMonthStart) {
+      return res.status(400).json({ error: 'A valid invoice profit period is required.' });
+    }
+    res.json(await Invoice.historyByShop(req.user.id, monthStart, nextMonthStart));
   } catch (error) {
     next(error);
   }
@@ -191,6 +197,11 @@ function isValidPriceInput(value) {
   return (typeof value === 'number' || typeof value === 'string')
     && String(value).trim() !== ''
     && isValidPrice(Number(value));
+}
+
+function isIsoDate(value) {
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) && date.toISOString() === value;
 }
 
 module.exports = router;
