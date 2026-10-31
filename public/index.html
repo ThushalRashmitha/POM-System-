@@ -6,9 +6,13 @@
   <meta name="description" content="A multi-shop point of sale and online marketplace.">
   <title>APEX-R POS System</title>
   <link rel="icon" type="image/png" sizes="32x32" href="/images/brand/logo.png">
+  <link rel="preload" as="image" href="/images/brand/logo.png">
   <link rel="stylesheet" href="/css/styles.css">
 </head>
 <body>
+  <div class="app-splash" id="app-splash" aria-hidden="true">
+    <img src="/images/brand/logo.png" alt="">
+  </div>
   <header class="site-header">
     <a class="brand" href="/"><img class="brand-logo" src="/images/brand/logo.png" alt=""> APEX-R POS System</a>
     <nav class="header-links">
@@ -43,5 +47,6 @@
     <article><span class="feature-icon amber"><i class="fa-brands fa-whatsapp"></i></span><h2>WhatsApp orders</h2><p>Send the selected item and customer details to the shop to confirm.</p></article>
   </section>
   <footer class="site-footer">© 2026 <span><a href="/login.html">Shop portal</a><a href="/admin.html">Platform administration</a></span></footer>
+  <script src="/js/splash.js"></script>
 </body>
 </html>
