@@ -35,6 +35,8 @@ The server creates the platform administrator in the Firestore `users` collectio
 
 Product image URLs can point to an existing HTTP(S) image. Uploaded PNG, JPG, and WebP images up to 2 MB are stored in Cloudinary, and the returned secure URL is saved in the Firestore product document. Set `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` from your Cloudinary dashboard to enable uploads; shops can still use existing HTTP(S) image URLs.
 
+Products have separate cost and selling prices. The dashboard values current stock at both prices and shows potential profit. Each new invoice saves the sold item's cost, revenue, and profit so later product price changes do not alter its recorded profit. Products created before cost tracking show a zero cost until updated, and older invoices do not have enough saved cost information to calculate historical profit.
+
 ## Deploy on Vercel
 
 Import this repository into Vercel with the project root set to the repository root. The included `vercel.json` routes requests to the Express app. In the Vercel project's **Settings → Environment Variables**, add these for **Production** (and Preview if needed):

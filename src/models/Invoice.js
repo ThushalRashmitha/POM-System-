@@ -41,6 +41,10 @@ async function countByShop(shopId) {
   return snapshot.data().count;
 }
 
+function roundMoney(value) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
 async function checkout(shopId, requestedItems, invoiceNumber) {
   const db = getDatabase();
   const quantities = new Map();
@@ -58,6 +62,8 @@ async function checkout(shopId, requestedItems, invoiceNumber) {
 
     const invoiceItems = [];
     let total = 0;
+    let costTotal = 0;
+    let profit = 0;
     for (let index = 0; index < productSnapshots.length; index += 1) {
       const snapshot = productSnapshots[index];
       const product = snapshot.exists ? snapshot.data() : null;
@@ -65,14 +71,23 @@ async function checkout(shopId, requestedItems, invoiceNumber) {
       if (!product || product.shop !== String(shopId) || product.available !== true || product.stock < quantity) {
         throw Object.assign(new Error('A product is unavailable or does not have enough stock. Refresh and try again.'), { status: 409 });
       }
-      const amount = product.price * quantity;
-      total += amount;
+      const unitPrice = Number(product.sellingPrice ?? product.price);
+      const unitCost = Number(product.costPrice ?? 0);
+      const amount = roundMoney(unitPrice * quantity);
+      const costAmount = roundMoney(unitCost * quantity);
+      const itemProfit = roundMoney(amount - costAmount);
+      total = roundMoney(total + amount);
+      costTotal = roundMoney(costTotal + costAmount);
+      profit = roundMoney(profit + itemProfit);
       invoiceItems.push({
         product: snapshot.id,
         name: product.name,
         quantity,
-        unitPrice: product.price,
-        amount
+        unitPrice,
+        unitCost,
+        amount,
+        costAmount,
+        profit: itemProfit
       });
       transaction.update(productRefs[index], {
         stock: product.stock - quantity,
@@ -86,6 +101,8 @@ async function checkout(shopId, requestedItems, invoiceNumber) {
       invoiceNumber,
       items: invoiceItems,
       total,
+      costTotal,
+      profit,
       soldAt: now,
       createdAt: now,
       updatedAt: now

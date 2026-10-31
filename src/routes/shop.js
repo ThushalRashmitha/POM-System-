@@ -17,13 +17,17 @@ router.get('/products', async (req, res, next) => {
 router.post('/products', async (req, res, next) => {
   try {
     const { name, description = '', imageUrl = '' } = req.body;
-    const price = Number(req.body.price);
+    const sellingPriceInput = req.body.sellingPrice ?? req.body.price;
+    const costPriceInput = req.body.costPrice ?? 0;
+    const sellingPrice = Number(sellingPriceInput);
+    const costPrice = Number(costPriceInput);
     const stock = Number(req.body.stock);
     if (typeof name !== 'string' || name.trim().length < 2 || name.trim().length > 160) {
       return res.status(400).json({ error: 'Product name must be between 2 and 160 characters.' });
     }
-    if (!Number.isFinite(price) || price < 0 || !Number.isInteger(stock) || stock < 0) {
-      return res.status(400).json({ error: 'Enter a valid non-negative price and whole-number stock quantity.' });
+    if (!isValidPriceInput(costPriceInput) || !isValidPriceInput(sellingPriceInput)
+      || !Number.isInteger(stock) || stock < 0) {
+      return res.status(400).json({ error: 'Enter valid non-negative cost and selling prices and a whole-number stock quantity.' });
     }
     if (typeof description !== 'string' || description.length > 2000) {
       return res.status(400).json({ error: 'Product description must be 2,000 characters or fewer.' });
@@ -37,7 +41,9 @@ router.post('/products', async (req, res, next) => {
       name: name.trim(),
       description: description.trim(),
       imageUrl,
-      price,
+      costPrice,
+      sellingPrice,
+      price: sellingPrice,
       stock
     });
     res.status(201).json({ product });
@@ -50,18 +56,33 @@ router.patch('/products/:id', async (req, res, next) => {
   try {
     if (!isValidDocumentId(req.params.id)) return res.status(400).json({ error: 'Invalid product ID.' });
     const updates = {};
-    for (const field of ['name', 'description', 'imageUrl', 'price', 'stock', 'available']) {
+    for (const field of ['name', 'description', 'imageUrl', 'price', 'sellingPrice', 'costPrice', 'stock', 'available']) {
       if (Object.hasOwn(req.body, field)) updates[field] = req.body[field];
     }
-    if (Object.hasOwn(updates, 'price')) updates.price = Number(updates.price);
+    if (Object.hasOwn(updates, 'price') && Object.hasOwn(updates, 'sellingPrice')
+      && Number(updates.price) !== Number(updates.sellingPrice)) {
+      return res.status(400).json({ error: 'Selling price was provided with conflicting values.' });
+    }
+    if (Object.hasOwn(updates, 'sellingPrice') || Object.hasOwn(updates, 'price')) {
+      const sellingPriceInput = updates.sellingPrice ?? updates.price;
+      const sellingPrice = Number(sellingPriceInput);
+      if (!isValidPriceInput(sellingPriceInput)) {
+        return res.status(400).json({ error: 'Selling price must be a valid non-negative amount.' });
+      }
+      updates.sellingPrice = sellingPrice;
+      updates.price = sellingPrice;
+    }
+    if (Object.hasOwn(updates, 'costPrice')) {
+      if (!isValidPriceInput(updates.costPrice)) {
+        return res.status(400).json({ error: 'Cost price must be a valid non-negative amount.' });
+      }
+      updates.costPrice = Number(updates.costPrice);
+    }
     if (Object.hasOwn(updates, 'stock')) updates.stock = Number(updates.stock);
     if (Object.hasOwn(updates, 'name') && (typeof updates.name !== 'string' || updates.name.trim().length < 2 || updates.name.length > 160)) {
       return res.status(400).json({ error: 'Enter a valid product name.' });
     }
     if (Object.hasOwn(updates, 'name')) updates.name = updates.name.trim();
-    if (Object.hasOwn(updates, 'price') && (!Number.isFinite(updates.price) || updates.price < 0)) {
-      return res.status(400).json({ error: 'Enter a valid non-negative price.' });
-    }
     if (Object.hasOwn(updates, 'stock') && (!Number.isInteger(updates.stock) || updates.stock < 0)) {
       return res.status(400).json({ error: 'Stock must be a non-negative whole number.' });
     }
@@ -160,6 +181,16 @@ function isValidProductImage(value) {
 
 function isValidDocumentId(id) {
   return typeof id === 'string' && /^[A-Za-z0-9_-]{20}$/.test(id);
+}
+
+function isValidPrice(price) {
+  return Number.isFinite(price) && price >= 0;
+}
+
+function isValidPriceInput(value) {
+  return (typeof value === 'number' || typeof value === 'string')
+    && String(value).trim() !== ''
+    && isValidPrice(Number(value));
 }
 
 module.exports = router;

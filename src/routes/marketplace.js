@@ -40,7 +40,7 @@ router.get('/products', async (req, res, next) => {
       .filter((product) => shopById.has(product.shop) && (!search || product.name.toLowerCase().includes(search)))
       .slice(0, 200)
       .map((product) => ({
-        ...product,
+        ...withoutCostPrice(product),
         shop: shopById.get(product.shop),
         inStock: product.stock > 0
       }));
@@ -76,7 +76,7 @@ router.get('/products/:id', async (req, res, next) => {
     }
     res.json({
       product: {
-        ...product,
+        ...withoutCostPrice(product),
         shop: { businessName: shop.businessName, whatsapp: shop.whatsapp },
         inStock: product.stock > 0
       }
@@ -85,6 +85,11 @@ router.get('/products/:id', async (req, res, next) => {
     next(error);
   }
 });
+
+function withoutCostPrice(product) {
+  const { costPrice, ...publicProduct } = product;
+  return publicProduct;
+}
 
 function isMarketplaceShop(shop) {
   return Boolean(shop && shop.role === 'shop' && shop.subscriptionStatus === 'active');

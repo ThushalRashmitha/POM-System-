@@ -66,11 +66,20 @@
     return '<span class="stock-badge stock-ok">Available</span>';
   }
 
+  function productSellingPrice(product) {
+    return Number(product.sellingPrice ?? product.price ?? 0);
+  }
+
+  function productCostPrice(product) {
+    return Number(product.costPrice ?? 0);
+  }
+
   function renderProducts() {
     productsTable.innerHTML = products.map((product) => {
       const name = POS.escapeHtml(product.name);
       return `<tr>
-        <td class="table-title">${name}</td><td>${POS.formatCurrency(product.price)}</td>
+        <td class="table-title">${name}</td><td>${POS.formatCurrency(productCostPrice(product))}</td>
+        <td>${POS.formatCurrency(productSellingPrice(product))}</td>
         <td>${product.stock}</td><td>${availability(product)}</td>
         <td><div class="actions">
           <button class="button button-quiet button-small" data-product-edit="${product._id}">Edit</button>
@@ -78,19 +87,24 @@
           <button class="button button-danger button-small" data-product-delete="${product._id}" aria-label="Delete ${name}"><i class="fa-solid fa-trash"></i></button>
         </div></td>
       </tr>`;
-    }).join('') || '<tr><td colspan="5">No products yet. Add a product above.</td></tr>';
+    }).join('') || '<tr><td colspan="6">No products yet. Add a product above.</td></tr>';
 
     overviewProducts.innerHTML = products.slice(0, 8).map((product) =>
-      `<tr><td class="table-title">${POS.escapeHtml(product.name)}</td><td>${POS.formatCurrency(product.price)}</td><td>${product.stock}</td><td>${availability(product)}</td></tr>`
+      `<tr><td class="table-title">${POS.escapeHtml(product.name)}</td><td>${POS.formatCurrency(productSellingPrice(product))}</td><td>${product.stock}</td><td>${availability(product)}</td></tr>`
     ).join('') || '<tr><td colspan="4">Add products to see them here.</td></tr>';
 
     const low = products.filter((product) => product.stock <= 7);
     lowStockProducts.innerHTML = low.map((product) =>
-      `<tr><td class="table-title">${POS.escapeHtml(product.name)}</td><td class="stock-low-value">${product.stock}</td><td>${POS.formatCurrency(product.price)}</td></tr>`
+      `<tr><td class="table-title">${POS.escapeHtml(product.name)}</td><td class="stock-low-value">${product.stock}</td><td>${POS.formatCurrency(productSellingPrice(product))}</td></tr>`
     ).join('') || '<tr><td colspan="3">No low-stock products.</td></tr>';
 
     document.getElementById('stat-products').textContent = products.length;
     document.getElementById('stat-low-stock').textContent = low.length;
+    const stockCostValue = products.reduce((sum, product) => sum + productCostPrice(product) * product.stock, 0);
+    const stockSellingValue = products.reduce((sum, product) => sum + productSellingPrice(product) * product.stock, 0);
+    document.getElementById('stat-stock-cost').textContent = POS.formatCurrency(stockCostValue);
+    document.getElementById('stat-stock-selling').textContent = POS.formatCurrency(stockSellingValue);
+    document.getElementById('stat-stock-profit').textContent = POS.formatCurrency(stockSellingValue - stockCostValue);
     renderPosProducts();
     renderCart();
   }
@@ -109,7 +123,7 @@
       return `<button class="pos-product ${disabled ? 'unavailable' : ''}" data-pos-add="${product._id}" ${disabled ? 'disabled' : ''}>
         <span class="pos-product-image">${image}</span>
         <span class="pos-product-name">${POS.escapeHtml(product.name)}</span>
-        <span class="pos-product-bottom"><strong>${POS.formatCurrency(product.price)}</strong>${stock}</span>
+        <span class="pos-product-bottom"><strong>${POS.formatCurrency(productSellingPrice(product))}</strong>${stock}</span>
       </button>`;
     }).join('') || '<div class="empty-state">No matching products found.</div>';
   }
@@ -132,10 +146,11 @@
     const count = entries.reduce((sum, [, quantity]) => sum + quantity, 0);
     cartItems.innerHTML = entries.map(([id, quantity]) => {
       const product = products.find((item) => item._id === id);
-      const amount = product.price * quantity;
+      const price = productSellingPrice(product);
+      const amount = price * quantity;
       total += amount;
       return `<article class="cart-item">
-        <div class="cart-item-info"><strong>${POS.escapeHtml(product.name)}</strong><span>${POS.formatCurrency(product.price)} each</span></div>
+        <div class="cart-item-info"><strong>${POS.escapeHtml(product.name)}</strong><span>${POS.formatCurrency(price)} each</span></div>
         <div class="cart-item-controls">
           <button type="button" data-cart-quantity="${id}" data-delta="-1" aria-label="Decrease quantity">−</button>
           <span>${quantity}</span>
@@ -163,16 +178,20 @@
   function renderInvoices() {
     const visibleInvoices = filteredInvoices();
     invoicesTable.innerHTML = visibleInvoices.map((invoice) => {
-      const items = invoice.items.map((item) => `${POS.escapeHtml(item.name)} × ${item.quantity}`).join(', ');
+      const items = invoice.items.map((item) => {
+        const itemProfit = Number.isFinite(item.profit) ? POS.formatCurrency(item.profit) : '—';
+        return `<span>${POS.escapeHtml(item.name)} × ${item.quantity} · ${itemProfit} profit</span>`;
+      }).join('<br>');
+      const profit = Number.isFinite(invoice.profit) ? POS.formatCurrency(invoice.profit) : '—';
       return `<tr><td class="table-title">${POS.escapeHtml(invoice.invoiceNumber)}</td>
         <td>${POS.escapeHtml(POS.formatDate(invoice.soldAt))}</td><td>${items}</td>
-        <td class="table-title">${POS.formatCurrency(invoice.total)}</td>
+        <td class="table-title">${POS.formatCurrency(invoice.total)}</td><td class="table-title">${profit}</td>
         <td><div class="actions">
           <button class="button button-quiet button-small" data-invoice-view="${invoice._id}" title="View receipt"><i class="fa-regular fa-eye"></i></button>
           <button class="button button-quiet button-small" data-invoice-print="${invoice._id}" title="Print receipt"><i class="fa-solid fa-print"></i></button>
           <button class="button button-danger button-small" data-invoice-delete="${invoice._id}" title="Delete invoice and report"><i class="fa-solid fa-trash"></i></button>
         </div></td></tr>`;
-    }).join('') || '<tr><td colspan="5">No invoices found for this period.</td></tr>';
+    }).join('') || '<tr><td colspan="6">No invoices found for this period.</td></tr>';
     renderReports();
   }
 
@@ -183,6 +202,8 @@
     const todayInvoices = invoices.filter((invoice) => localDateKey(new Date(invoice.soldAt)) === todayKey);
     const monthInvoices = invoices.filter((invoice) => localDateKey(new Date(invoice.soldAt)).startsWith(monthKey));
     const sum = (list) => list.reduce((total, invoice) => total + invoice.total, 0);
+    const sumRecordedProfit = (list) => list.reduce((total, invoice) =>
+      total + (Number.isFinite(invoice.profit) ? invoice.profit : 0), 0);
     document.getElementById('stat-bills-today').textContent = todayInvoices.length;
     document.getElementById('stat-bills-month').textContent = monthInvoices.length;
     document.getElementById('stat-income-today').textContent = POS.formatCurrency(sum(todayInvoices));
@@ -190,18 +211,23 @@
     document.getElementById('report-today').textContent = POS.formatCurrency(sum(todayInvoices));
     document.getElementById('report-month').textContent = POS.formatCurrency(sum(monthInvoices));
     document.getElementById('report-total').textContent = POS.formatCurrency(sum(invoices));
+    document.getElementById('report-profit-today').textContent = POS.formatCurrency(sumRecordedProfit(todayInvoices));
+    document.getElementById('report-profit-month').textContent = POS.formatCurrency(sumRecordedProfit(monthInvoices));
+    document.getElementById('report-profit-total').textContent = POS.formatCurrency(sumRecordedProfit(invoices));
 
     const sales = new Map();
     invoices.forEach((invoice) => invoice.items.forEach((item) => {
-      const previous = sales.get(item.name) || { quantity: 0, revenue: 0 };
+      const previous = sales.get(item.name) || { quantity: 0, revenue: 0, profit: 0, hasCompleteProfit: true };
       previous.quantity += item.quantity;
       previous.revenue += item.amount;
+      if (Number.isFinite(item.profit)) previous.profit += item.profit;
+      else previous.hasCompleteProfit = false;
       sales.set(item.name, previous);
     }));
     const rows = [...sales.entries()].sort((a, b) => b[1].revenue - a[1].revenue).map(([name, values]) =>
-      `<tr><td class="table-title">${POS.escapeHtml(name)}</td><td>${values.quantity}</td><td class="table-title">${POS.formatCurrency(values.revenue)}</td></tr>`
+      `<tr><td class="table-title">${POS.escapeHtml(name)}</td><td>${values.quantity}</td><td class="table-title">${POS.formatCurrency(values.revenue)}</td><td class="table-title">${values.hasCompleteProfit ? POS.formatCurrency(values.profit) : '—'}</td></tr>`
     ).join('');
-    document.getElementById('product-sales-table').innerHTML = rows || '<tr><td colspan="3">No product sales recorded yet.</td></tr>';
+    document.getElementById('product-sales-table').innerHTML = rows || '<tr><td colspan="4">No product sales recorded yet.</td></tr>';
   }
 
   function localDateKey(date) {
@@ -230,12 +256,14 @@
     const rows = filteredInvoices();
     const escapeCsv = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
     const csv = [
-      ['Invoice number', 'Date', 'Items', 'Total'],
+      ['Invoice number', 'Date', 'Items', 'Revenue', 'Cost', 'Profit'],
       ...rows.map((invoice) => [
         invoice.invoiceNumber,
         new Date(invoice.soldAt).toISOString(),
         invoice.items.map((item) => `${item.name} x ${item.quantity}`).join('; '),
-        invoice.total
+        invoice.total,
+        Number.isFinite(invoice.costTotal) ? invoice.costTotal : '',
+        Number.isFinite(invoice.profit) ? invoice.profit : ''
       ])
     ].map((row) => row.map(escapeCsv).join(',')).join('\r\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -320,7 +348,9 @@
           ? originalImageUrl : ''));
       const payload = {
         name: values.get('name'), description: values.get('description'),
-        price: values.get('price'), stock: values.get('stock')
+        costPrice: values.get('costPrice'),
+        sellingPrice: values.get('sellingPrice'),
+        stock: values.get('stock')
       };
       if (!wasEditing || imageFile.size || values.get('imageUrl') || !originalImageUrl.startsWith('data:image/')) {
         payload.imageUrl = imageUrl;
@@ -370,9 +400,10 @@
         if (!product) return;
         editingProductId = product._id;
         const form = document.getElementById('product-form');
-        for (const field of ['name', 'description', 'price', 'stock']) {
+        for (const field of ['name', 'description', 'costPrice', 'stock']) {
           form.elements.namedItem(field).value = product[field] ?? '';
         }
+        form.elements.namedItem('sellingPrice').value = productSellingPrice(product);
         originalImageUrl = product.imageUrl || '';
         form.elements.namedItem('imageUrl').value = originalImageUrl.startsWith('data:image/') ? '' : originalImageUrl;
         if (product.imageUrl) showImagePreview(product.imageUrl, 'Current product image');
