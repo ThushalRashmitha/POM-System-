@@ -65,6 +65,8 @@
   .site-footer{padding-inline:16px}
 }
 
+.detail-image{object-fit:contain}
+
 @media(max-width:980px){
   .app-layout{grid-template-columns:minmax(170px,220px) minmax(0,1fr)}
   .workspace,.admin-workspace{min-width:0}
