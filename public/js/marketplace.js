@@ -3,6 +3,8 @@
   const message = document.getElementById('market-message');
   const dialog = document.getElementById('product-dialog');
   const detail = document.getElementById('product-detail');
+  const imageLightbox = document.getElementById('image-lightbox');
+  const imageLightboxPhoto = document.getElementById('image-lightbox-photo');
   const search = document.getElementById('market-search');
   const shopId = new URLSearchParams(window.location.search).get('shop');
   let searchTimer;
@@ -54,7 +56,7 @@
       const shopQuery = shopId ? `?shop=${encodeURIComponent(shopId)}` : '';
       const { product } = await POS.api(`/marketplace/products/${encodeURIComponent(id)}${shopQuery}`);
       const image = product.imageUrl
-        ? `<img class="detail-image" src="${POS.escapeHtml(product.imageUrl)}" alt="${POS.escapeHtml(product.name)}">`
+        ? `<img class="detail-image" src="${POS.escapeHtml(product.imageUrl)}" alt="${POS.escapeHtml(product.name)}" tabindex="0" role="button" aria-label="View ${POS.escapeHtml(product.name)} image full screen">`
         : '<div class="market-image-placeholder detail-image"><i class="fa-solid fa-box-open"></i></div>';
       const inStock = product.stock > 0;
       const whatsapp = String(product.shop.whatsapp || '').replace(/[^\d]/g, '');
@@ -114,6 +116,26 @@
     }
   });
   document.getElementById('close-dialog').addEventListener('click', () => dialog.close());
+  detail.addEventListener('click', (event) => {
+    const image = event.target.closest('.detail-image');
+    if (!image || image.tagName !== 'IMG') return;
+    openImageLightbox(image);
+  });
+  detail.addEventListener('keydown', (event) => {
+    const image = event.target.closest('.detail-image');
+    if (image && image.tagName === 'IMG' && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault();
+      openImageLightbox(image);
+    }
+  });
+  document.getElementById('close-image-lightbox').addEventListener('click', () => imageLightbox.close());
+  imageLightbox.addEventListener('click', (event) => {
+    if (event.target === imageLightbox) imageLightbox.close();
+  });
+  imageLightbox.addEventListener('close', () => {
+    imageLightboxPhoto.removeAttribute('src');
+    if (dialog.open) detail.querySelector('.detail-image[role="button"]')?.focus();
+  });
   dialog.addEventListener('click', (event) => {
     if (event.target === dialog) dialog.close();
   });
@@ -122,6 +144,12 @@
     clearTimeout(searchTimer);
     searchTimer = setTimeout(loadProducts, 250);
   });
+
+  function openImageLightbox(image) {
+    imageLightboxPhoto.src = image.src;
+    imageLightboxPhoto.alt = image.alt;
+    imageLightbox.showModal();
+  }
 
   async function start() {
     await loadProducts();

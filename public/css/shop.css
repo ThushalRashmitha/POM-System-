@@ -36,7 +36,7 @@
 .pos-product:hover:not(:disabled){border-color:#b6aff7;box-shadow:0 5px 15px #5948e812;transform:translateY(-2px)}
 .pos-product:disabled{cursor:not-allowed;opacity:.62}
 .pos-product-image{height:104px;display:grid;place-items:center;overflow:hidden;border-radius:7px;background:#f3f3fb;color:#aaa2ef}
-.pos-product-image img{width:100%;height:100%;object-fit:cover}
+.pos-product-image img{width:100%;height:100%;object-fit:contain}
 .pos-placeholder{font-size:23px}
 .pos-product-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:700;color:#283246}
 .pos-product-bottom{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0}

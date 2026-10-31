@@ -65,7 +65,13 @@
   .site-footer{padding-inline:16px}
 }
 
-.detail-image{object-fit:contain}
+.market-image,.detail-image{object-fit:contain}
+.detail-image{cursor:zoom-in}
+.image-lightbox{width:100vw;height:100vh;height:100dvh;max-width:none;max-height:none;margin:0;padding:52px 16px 16px;border:0;background:#101116;color:white}
+.image-lightbox::backdrop{background:#101116}
+.image-lightbox img{display:block;width:100%;height:100%;object-fit:contain}
+.image-lightbox-close{position:fixed;top:14px;right:16px;width:44px;height:44px;border:0;border-radius:50%;background:#ffffff20;color:white;font-size:24px;cursor:pointer}
+.image-lightbox-close:focus-visible{outline:2px solid white;outline-offset:3px}
 
 @media(max-width:980px){
   .app-layout{grid-template-columns:minmax(170px,220px) minmax(0,1fr)}
