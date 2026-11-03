@@ -15,7 +15,7 @@ router.get('/products', async (req, res, next) => {
     if (req.user) {
       shops = [req.user];
     } else if (requestedShopId) {
-      if (!isValidDocumentId(requestedShopId)) {
+      if (!isValidShopId(requestedShopId)) {
         return res.status(400).json({ error: 'Invalid shop ID.' });
       }
       const shop = await User.findById(requestedShopId);
@@ -57,7 +57,7 @@ router.get('/products', async (req, res, next) => {
 
 router.get('/products/:id', async (req, res, next) => {
   try {
-    if (!isValidDocumentId(req.params.id)) return res.status(400).json({ error: 'Invalid product ID.' });
+    if (!isValidProductId(req.params.id)) return res.status(400).json({ error: 'Invalid product ID.' });
     const product = await Product.findById(req.params.id);
     if (!product || !product.available) {
       return res.status(404).json({ error: 'This product is not currently available.' });
@@ -66,6 +66,9 @@ router.get('/products/:id', async (req, res, next) => {
       return res.status(404).json({ error: 'This product is not currently available.' });
     }
     const requestedShopId = typeof req.query.shop === 'string' ? req.query.shop : '';
+    if (requestedShopId && !isValidShopId(requestedShopId)) {
+      return res.status(400).json({ error: 'Invalid shop ID.' });
+    }
     if (requestedShopId && product.shop !== requestedShopId) {
       return res.status(404).json({ error: 'This product is not currently available.' });
     }
@@ -95,8 +98,12 @@ function isMarketplaceShop(shop) {
   return Boolean(shop && shop.role === 'shop' && shop.subscriptionStatus === 'active');
 }
 
-function isValidDocumentId(id) {
+function isValidShopId(id) {
   return typeof id === 'string' && /^[A-Za-z0-9_-]{20}$/.test(id);
+}
+
+function isValidProductId(id) {
+  return typeof id === 'string' && /^[A-Za-z0-9_-]{1,160}$/.test(id);
 }
 
 module.exports = router;

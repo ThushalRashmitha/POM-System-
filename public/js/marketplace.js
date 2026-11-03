@@ -7,6 +7,8 @@
   const imageLightboxPhoto = document.getElementById('image-lightbox-photo');
   const search = document.getElementById('market-search');
   const shopId = new URLSearchParams(window.location.search).get('shop');
+  const defaultTitle = document.title;
+  const defaultDescription = document.querySelector('meta[name="description"]').content;
   let searchTimer;
 
   function renderProducts(products) {
@@ -60,20 +62,44 @@
         : '<div class="market-image-placeholder detail-image"><i class="fa-solid fa-box-open"></i></div>';
       const inStock = product.stock > 0;
       const whatsapp = String(product.shop.whatsapp || '').replace(/[^\d]/g, '');
+      const shareUrl = new URL(`/product/${encodeURIComponent(product._id)}`, window.location.origin).href;
+      const shareDescription = `${POS.formatCurrency(product.price)}. ${product.description || 'Ask the shop for more information about this product.'}`;
+      const shareImage = absoluteImageUrl(product.imageUrl);
+      updateProductMetadata({
+        title: `${product.name} | ${product.shop.businessName}`,
+        description: shareDescription,
+        image: shareImage,
+        url: shareUrl
+      });
       detail.innerHTML = `${image}<p class="detail-shop">SOLD BY ${POS.escapeHtml(product.shop.businessName)}</p>
         <h2>${POS.escapeHtml(product.name)}</h2><p class="detail-price">${POS.formatCurrency(product.price)}</p>
+        <button class="button button-outline product-share" type="button" data-product-share="${POS.escapeHtml(shareUrl)}"><i class="fa-solid fa-share-nodes"></i> Share product</button>
         <p class="detail-description">${POS.escapeHtml(product.description || 'Ask the shop for more information about this product.')}</p>
         <p class="detail-stock ${inStock ? 'availability in-stock' : 'availability out-stock'}">${inStock ? `Available now · ${product.stock} in stock` : 'Currently out of stock'}</p>
         ${inStock ? `<form class="customer-form" id="order-form">
           <label>Your name<input name="customerName" autocomplete="name" maxlength="100" required placeholder="Name"></label>
           <label>Your phone number<input name="customerPhone" type="tel" autocomplete="tel" maxlength="20" required placeholder="Include country code"></label>
           <label>Quantity<input name="quantity" type="number" min="1" max="${product.stock}" value="1" required></label>
+          <fieldset class="order-type-options">
+            <legend>Order type</legend>
+            <label><input type="radio" name="orderType" value="delivery" checked> Home Delivery</label>
+            <label><input type="radio" name="orderType" value="pickup"> Store Pickup</label>
+          </fieldset>
+          <label class="delivery-address-field" id="delivery-address-field">Delivery address<textarea name="deliveryAddress" maxlength="500" required placeholder="Enter your delivery address"></textarea></label>
           <button class="button button-primary button-full" type="submit"><i class="fa-brands fa-whatsapp"></i> Order via WhatsApp</button>
           <small class="form-note">WhatsApp opens with your order details ready. Review and tap Send to contact the shop.</small>
         </form>` : '<p class="notice notice-info">This item cannot be ordered until it is back in stock.</p>'}`;
       dialog.showModal();
       const orderForm = document.getElementById('order-form');
       if (orderForm) {
+        orderForm.querySelectorAll('[name="orderType"]').forEach((input) => {
+          input.addEventListener('change', () => {
+            const deliverySelected = orderForm.elements.orderType.value === 'delivery';
+            const addressField = document.getElementById('delivery-address-field');
+            addressField.classList.toggle('hidden', !deliverySelected);
+            addressField.querySelector('textarea').required = deliverySelected;
+          });
+        });
         orderForm.addEventListener('submit', (event) => {
           event.preventDefault();
           if (!whatsapp) {
@@ -87,11 +113,19 @@
             dialog.close();
             return;
           }
+          const orderType = values.get('orderType');
+          const deliveryAddress = String(values.get('deliveryAddress') || '').trim();
+          if (orderType === 'delivery' && !deliveryAddress) {
+            POS.showNotice(message, 'Enter a delivery address or choose Store Pickup.', 'error');
+            return;
+          }
           const orderMessage = [
             `Hello ${product.shop.businessName}, I would like to order:`,
             `Product: ${product.name}`,
             `Quantity: ${quantity}`,
             `Unit price: ${POS.formatCurrency(product.price)}`,
+            `Order type: ${orderType === 'delivery' ? 'Home Delivery' : 'Store Pickup'}`,
+            ...(orderType === 'delivery' ? [`Delivery address: ${deliveryAddress}`] : []),
             `Customer: ${values.get('customerName')}`,
             `Phone: ${values.get('customerPhone')}`
           ].join('\n');
@@ -117,6 +151,11 @@
   });
   document.getElementById('close-dialog').addEventListener('click', () => dialog.close());
   detail.addEventListener('click', (event) => {
+    const shareButton = event.target.closest('[data-product-share]');
+    if (shareButton) {
+      shareProduct(shareButton.dataset.productShare);
+      return;
+    }
     const image = event.target.closest('.detail-image');
     if (!image || image.tagName !== 'IMG') return;
     openImageLightbox(image);
@@ -139,6 +178,15 @@
   dialog.addEventListener('click', (event) => {
     if (event.target === dialog) dialog.close();
   });
+  dialog.addEventListener('close', () => {
+    document.title = defaultTitle;
+    updateProductMetadata({
+      title: defaultTitle,
+      description: defaultDescription,
+      image: absoluteImageUrl('/images/brand/logo.png'),
+      url: window.location.href
+    });
+  });
   document.getElementById('search-button').addEventListener('click', loadProducts);
   search.addEventListener('input', () => {
     clearTimeout(searchTimer);
@@ -151,8 +199,50 @@
     imageLightbox.showModal();
   }
 
+  function updateProductMetadata({ title, description, image, url }) {
+    document.title = title;
+    document.querySelector('meta[name="description"]').content = description;
+    setMetaContent('og:title', title);
+    setMetaContent('og:description', description);
+    setMetaContent('og:image', image);
+    setMetaContent('og:url', url);
+  }
+
+  function setMetaContent(property, content) {
+    document.querySelector(`meta[property="${property}"]`).content = content;
+  }
+
+  function absoluteImageUrl(imageUrl) {
+    if (!imageUrl || imageUrl.startsWith('data:')) {
+      return new URL('/images/brand/logo.png', window.location.origin).href;
+    }
+    try {
+      const url = new URL(imageUrl, window.location.origin);
+      return ['http:', 'https:'].includes(url.protocol)
+        ? url.href
+        : new URL('/images/brand/logo.png', window.location.origin).href;
+    } catch {
+      return new URL('/images/brand/logo.png', window.location.origin).href;
+    }
+  }
+
+  async function shareProduct(url) {
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: document.title, url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      POS.showNotice(message, 'Product link copied. Share it to show the product preview.', 'success');
+    } catch (error) {
+      if (error.name !== 'AbortError') POS.showNotice(message, error.message, 'error');
+    }
+  }
+
   async function start() {
     await loadProducts();
+    const productId = new URLSearchParams(window.location.search).get('product');
+    if (productId) await openProduct(productId);
   }
 
   start();
