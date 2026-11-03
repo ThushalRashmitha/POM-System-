@@ -15,7 +15,14 @@
   let editingProductId = null;
   let originalImageUrl = '';
   let toastTimer;
+  let scannerBuffer = '';
+  let scannerLastKeyAt = 0;
+  let scannerBufferTarget = null;
+  let scannerTargetStartValue = '';
+  let scannerIsFast = true;
   let shopProfile = { businessName: 'APEX-R POS System', whatsapp: '' };
+  const scannerKeyInterval = 75;
+  const scannerResetInterval = 150;
 
   document.querySelectorAll('[data-logout]').forEach((button) => button.addEventListener('click', () => {
     POS.signOut().catch((error) => notify(error.message));
@@ -306,13 +313,56 @@
     }
   }
 
-  barcodeInput.addEventListener('keydown', (event) => {
-    if (event.key !== 'Enter') return;
-    event.preventDefault();
-    const barcode = barcodeInput.value.trim();
-    barcodeInput.value = '';
-    if (barcode) addScannedProduct(barcode);
-  });
+  function resetScannerBuffer() {
+    scannerBuffer = '';
+    scannerLastKeyAt = 0;
+    scannerBufferTarget = null;
+    scannerTargetStartValue = '';
+    scannerIsFast = true;
+  }
+
+  function handleScannerKeydown(event) {
+    if (event.key === 'Enter') {
+      const manualBarcode = event.target === barcodeInput ? barcodeInput.value.trim() : '';
+      const scannedBarcode = scannerBuffer.length >= 2 && scannerIsFast ? scannerBuffer : '';
+      const barcode = scannedBarcode || manualBarcode;
+      if (!barcode) {
+        resetScannerBuffer();
+        return;
+      }
+
+      event.preventDefault();
+      if (event.target === barcodeInput) {
+        barcodeInput.value = '';
+      } else if (scannerBufferTarget === event.target && scannerBufferTarget instanceof HTMLInputElement
+        && scannerBufferTarget.value === scannerTargetStartValue + scannerBuffer) {
+        scannerBufferTarget.value = scannerTargetStartValue;
+      }
+      resetScannerBuffer();
+      addScannedProduct(barcode);
+      return;
+    }
+
+    if (event.key.length !== 1 || event.ctrlKey || event.altKey || event.metaKey) return;
+
+    const now = performance.now();
+    const targetChanged = scannerBuffer && scannerBufferTarget !== event.target;
+    if (!scannerBuffer || targetChanged || now - scannerLastKeyAt > scannerResetInterval) {
+      scannerBuffer = event.key;
+      scannerIsFast = true;
+      scannerBufferTarget = event.target;
+      scannerTargetStartValue = event.target instanceof HTMLInputElement
+        || event.target instanceof HTMLTextAreaElement
+        ? event.target.value
+        : '';
+    } else {
+      scannerBuffer += event.key;
+      if (now - scannerLastKeyAt > scannerKeyInterval) scannerIsFast = false;
+    }
+    scannerLastKeyAt = now;
+  }
+
+  window.addEventListener('keydown', handleScannerKeydown);
   document.getElementById('pos-search').addEventListener('input', (event) => renderPosProducts(event.target.value));
   posGrid.addEventListener('click', (event) => {
     const button = event.target.closest('[data-pos-add]');
