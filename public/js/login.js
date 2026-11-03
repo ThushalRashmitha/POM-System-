@@ -10,8 +10,8 @@
   function setMode(isRegister) {
     loginForm.classList.toggle('hidden', isRegister);
     registerForm.classList.toggle('hidden', !isRegister);
-    title.textContent = isRegister ? 'Register your shop' : 'Welcome back';
-    subtitle.textContent = isRegister ? 'Create your separate shop portal' : 'Sign in to your shop portal';
+    title.textContent = isRegister ? 'Register your shop' : 'Admin Login';
+    subtitle.textContent = isRegister ? 'Create your separate shop portal' : 'Sign in to your APEX-R POS account';
     switchLink.innerHTML = isRegister
       ? 'Already registered? <a href="/login.html">Sign in</a>'
       : 'New here? <a href="/login.html?mode=register">Register your shop</a>';

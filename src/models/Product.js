@@ -31,8 +31,21 @@ async function findById(id) {
   return productFromSnapshot(snapshot);
 }
 
-async function createProduct(product) {
-  const ref = getDatabase().collection(PRODUCTS).doc();
+async function findByBarcode(barcode, shopId) {
+  const barcodeValue = String(barcode);
+  if (/^[A-Za-z0-9_-]{1,160}$/.test(barcodeValue)) {
+    const documentSnapshot = await getDatabase().collection(PRODUCTS).doc(barcodeValue).get();
+    if (documentSnapshot.exists && documentSnapshot.get('shop') === String(shopId)) {
+      return productFromSnapshot(documentSnapshot);
+    }
+  }
+  const snapshot = await getDatabase().collection(PRODUCTS).where('barcode', '==', barcodeValue).get();
+  const product = snapshot.docs.find((doc) => doc.get('shop') === String(shopId));
+  return product ? productFromSnapshot(product) : null;
+}
+
+async function createProduct(product, productId) {
+  const ref = getDatabase().collection(PRODUCTS).doc(String(productId));
   const now = new Date().toISOString();
   const image = product.imageUrl?.startsWith('data:image/')
     ? await saveProductImage(product.shop, product.imageUrl)
@@ -102,6 +115,7 @@ module.exports = {
   createProduct,
   deleteByShop,
   deleteOwned,
+  findByBarcode,
   findById,
   listAvailable,
   listAvailableByShop,

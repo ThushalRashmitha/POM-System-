@@ -5,6 +5,7 @@
   const invoicesTable = document.getElementById('invoices-table');
   const posGrid = document.getElementById('pos-product-grid');
   const cartItems = document.getElementById('cart-items');
+  const barcodeInput = document.getElementById('pos-barcode');
   const toast = document.getElementById('app-toast');
   const receiptDialog = document.getElementById('receipt-dialog');
   let products = [];
@@ -26,6 +27,7 @@
   function openPanel(name) {
     document.querySelectorAll('.panel').forEach((panel) => panel.classList.toggle('active', panel.id === `panel-${name}`));
     document.querySelectorAll('[data-panel]').forEach((button) => button.classList.toggle('active', button.dataset.panel === name));
+    if (name === 'new-bill') barcodeInput.focus();
     if (name === 'invoices') renderInvoices();
     if (name === 'reports') renderReports();
   }
@@ -122,6 +124,28 @@
     }
     cart.set(productId, quantity + 1);
     renderCart();
+  }
+
+  async function addScannedProduct(barcode) {
+    try {
+      const { product } = await POS.api(`/shop/products/by-barcode?barcode=${encodeURIComponent(barcode)}`);
+      const existingIndex = products.findIndex((item) => item._id === product._id);
+      if (existingIndex === -1) products.push(product);
+      else products[existingIndex] = product;
+      if (!product.available || product.stock < 1) {
+        notify(`${product.name} is unavailable or out of stock.`);
+        return;
+      }
+      addToCart(product._id);
+    } catch (error) {
+      if (error.status === 401 || error.status === 403) {
+        window.location.assign('/login.html');
+      } else if (error.status === 404) {
+        notify(`No product found for barcode "${barcode}".`);
+      } else {
+        notify(error.message);
+      }
+    }
   }
 
   function renderCart() {
@@ -282,6 +306,13 @@
     }
   }
 
+  barcodeInput.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    const barcode = barcodeInput.value.trim();
+    barcodeInput.value = '';
+    if (barcode) addScannedProduct(barcode);
+  });
   document.getElementById('pos-search').addEventListener('input', (event) => renderPosProducts(event.target.value));
   posGrid.addEventListener('click', (event) => {
     const button = event.target.closest('[data-pos-add]');
@@ -341,6 +372,7 @@
           ? originalImageUrl : ''));
       const payload = {
         name: values.get('name'), description: values.get('description'),
+        productId: values.get('productId'),
         costPrice: values.get('costPrice'),
         sellingPrice: values.get('sellingPrice'),
         stock: values.get('stock')
@@ -396,6 +428,8 @@
         for (const field of ['name', 'description', 'costPrice', 'stock']) {
           form.elements.namedItem(field).value = product[field] ?? '';
         }
+        form.elements.namedItem('productId').value = product._id;
+        form.elements.namedItem('productId').readOnly = true;
         form.elements.namedItem('sellingPrice').value = productSellingPrice(product);
         originalImageUrl = product.imageUrl || '';
         form.elements.namedItem('imageUrl').value = originalImageUrl.startsWith('data:image/') ? '' : originalImageUrl;
@@ -463,6 +497,7 @@
   function resetProductEdit() {
     editingProductId = null;
     originalImageUrl = '';
+    document.querySelector('[name="productId"]').readOnly = false;
     document.getElementById('product-form-title').textContent = 'Add a product';
     document.getElementById('product-save-button').textContent = 'Add product';
     document.getElementById('product-cancel-edit').classList.add('hidden');

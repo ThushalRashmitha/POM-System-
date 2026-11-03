@@ -47,9 +47,10 @@
         </div>
       </section>
       <section class="panel" id="panel-new-bill">
-        <div class="page-heading"><div><span class="eyebrow">POINT OF SALE</span><h1>New bill</h1><p>Select products to add them to the cart, then submit and print the receipt.</p></div></div>
+        <div class="page-heading"><div><span class="eyebrow">POINT OF SALE</span><h1>New bill</h1><p>Scan a product barcode or select products to add them to the cart, then submit and print the receipt.</p></div></div>
         <div class="pos-layout">
           <div class="content-card pos-catalog">
+            <label class="pos-search" for="pos-barcode"><i class="fa-solid fa-barcode" aria-hidden="true"></i><input id="pos-barcode" type="text" autocomplete="off" placeholder="Scan barcode and press Enter..." aria-label="Scan product barcode"></label>
             <div class="pos-search"><i class="fa-solid fa-magnifying-glass"></i><input id="pos-search" type="search" placeholder="Search products..." aria-label="Search products"></div>
             <div class="pos-product-grid" id="pos-product-grid"></div>
           </div>
@@ -63,9 +64,10 @@
       <section class="panel" id="panel-inventory">
         <div class="page-heading"><div><span class="eyebrow">INVENTORY</span><h1>Inventory</h1><p>Manage product details, stock, and marketplace availability.</p></div></div>
         <div class="content-card">
-          <div class="card-heading"><div><h2 id="product-form-title">Add a product</h2><p>Set its description, cost and selling prices, photo and quantity.</p></div></div>
+          <div class="card-heading"><div><h2 id="product-form-title">Add a product</h2><p>Set its Product ID / Barcode, description, cost and selling prices, photo and quantity.</p></div></div>
           <form id="product-form" class="product-form">
             <label>Product name<input name="name" required minlength="2" maxlength="160" placeholder="Product name"></label>
+            <label>Product ID / Barcode<input name="productId" type="text" required minlength="1" maxlength="160" pattern="[A-Za-z0-9_-]+" autocomplete="off" placeholder="Scan or enter product ID"></label>
             <label>Description<input name="description" maxlength="2000" placeholder="Details customers should know"></label>
             <label>Cost price / CP (Rs.)<input name="costPrice" type="number" min="0" step="0.01" required placeholder="0.00"></label>
             <label>Selling price / SP (Rs.)<input name="sellingPrice" type="number" min="0" step="0.01" required placeholder="0.00"></label>

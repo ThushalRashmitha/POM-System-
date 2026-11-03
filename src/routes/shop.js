@@ -6,6 +6,20 @@ const { requireRole, requireUser } = require('../middleware/auth');
 const router = express.Router();
 router.use(requireUser, requireRole('shop'));
 
+router.get('/products/by-barcode', async (req, res, next) => {
+  try {
+    const barcode = req.query.barcode;
+    if (typeof barcode !== 'string' || !barcode.trim() || barcode.length > 160) {
+      return res.status(400).json({ error: 'A valid barcode is required.' });
+    }
+    const product = await Product.findByBarcode(barcode.trim(), req.user.id);
+    if (!product) return res.status(404).json({ error: 'Product not found for this barcode.' });
+    res.json({ product });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get('/products', async (req, res, next) => {
   try {
     res.json({ products: await Product.listByShop(req.user.id) });
@@ -17,6 +31,7 @@ router.get('/products', async (req, res, next) => {
 router.post('/products', async (req, res, next) => {
   try {
     const { name, description = '', imageUrl = '' } = req.body;
+    const productId = req.body.productId;
     const sellingPriceInput = req.body.sellingPrice ?? req.body.price;
     const costPriceInput = req.body.costPrice ?? 0;
     const sellingPrice = Number(sellingPriceInput);
@@ -32,22 +47,33 @@ router.post('/products', async (req, res, next) => {
     if (typeof description !== 'string' || description.length > 2000) {
       return res.status(400).json({ error: 'Product description must be 2,000 characters or fewer.' });
     }
+    if (!isValidDocumentId(productId)) {
+      return res.status(400).json({ error: 'Product ID / Barcode can contain 1 to 160 letters, numbers, underscores, or hyphens.' });
+    }
     if (typeof imageUrl !== 'string' || (imageUrl && !isValidProductImage(imageUrl))) {
       return res.status(400).json({ error: 'Product image must be a valid HTTP or HTTPS URL or a PNG, JPG, or WebP image no larger than 2 MB.' });
     }
 
+    const normalizedProductId = productId.trim();
+    if (await Product.findByBarcode(normalizedProductId, req.user.id)) {
+      return res.status(409).json({ error: 'A product with this barcode already exists in your shop.' });
+    }
     const product = await Product.createProduct({
       shop: req.user.id,
       name: name.trim(),
       description: description.trim(),
+      barcode: normalizedProductId,
       imageUrl,
       costPrice,
       sellingPrice,
       price: sellingPrice,
       stock
-    });
+    }, normalizedProductId);
     res.status(201).json({ product });
   } catch (error) {
+    if (error.code === 6 || error.code === 'already-exists') {
+      return res.status(409).json({ error: 'A product with this ID already exists.' });
+    }
     next(error);
   }
 });
@@ -56,8 +82,20 @@ router.patch('/products/:id', async (req, res, next) => {
   try {
     if (!isValidDocumentId(req.params.id)) return res.status(400).json({ error: 'Invalid product ID.' });
     const updates = {};
-    for (const field of ['name', 'description', 'imageUrl', 'price', 'sellingPrice', 'costPrice', 'stock', 'available']) {
+    for (const field of ['name', 'description', 'barcode', 'imageUrl', 'price', 'sellingPrice', 'costPrice', 'stock', 'available']) {
       if (Object.hasOwn(req.body, field)) updates[field] = req.body[field];
+    }
+    if (Object.hasOwn(updates, 'barcode')) {
+      if (typeof updates.barcode !== 'string' || updates.barcode.length > 160) {
+        return res.status(400).json({ error: 'Barcode must be 160 characters or fewer.' });
+      }
+      updates.barcode = updates.barcode.trim();
+      if (updates.barcode) {
+        const existingProduct = await Product.findByBarcode(updates.barcode, req.user.id);
+        if (existingProduct && existingProduct._id !== req.params.id) {
+          return res.status(409).json({ error: 'A product with this barcode already exists in your shop.' });
+        }
+      }
     }
     if (Object.hasOwn(updates, 'price') && Object.hasOwn(updates, 'sellingPrice')
       && Number(updates.price) !== Number(updates.sellingPrice)) {
@@ -186,7 +224,7 @@ function isValidProductImage(value) {
 }
 
 function isValidDocumentId(id) {
-  return typeof id === 'string' && /^[A-Za-z0-9_-]{20}$/.test(id);
+  return typeof id === 'string' && /^[A-Za-z0-9_-]{1,160}$/.test(id);
 }
 
 function isValidPrice(price) {

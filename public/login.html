@@ -5,12 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>APEX-R POS System</title>
   <link rel="icon" type="image/png" sizes="32x32" href="/images/brand/logo.png">
+  <link rel="preload" as="image" href="/images/brand/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/styles.css">
 </head>
 <body class="auth-page">
+  <div class="app-splash" id="app-splash" aria-hidden="true">
+    <div class="app-splash-brand">
+      <img src="/images/brand/logo.png" alt="">
+      <span>APEX-R POS SYSTEM</span>
+    </div>
+  </div>
   <a class="brand auth-brand" href="/"><img class="brand-logo" src="/images/brand/logo.png" alt=""> APEX-R POS System</a>
   <main class="auth-card">
-    <div class="auth-heading"><span class="brand-mark"><i class="fa-solid fa-shop"></i></span><h1 id="auth-title">Welcome back</h1><p id="auth-subtitle">Sign in to your shop portal</p></div>
+    <div class="auth-heading"><span class="brand-mark"><i class="fa-solid fa-shop"></i></span><h1 id="auth-title">Admin Login</h1><p id="auth-subtitle">Sign in to your APEX-R POS account</p></div>
     <div id="auth-message" class="notice hidden" role="status"></div>
     <form id="login-form" class="form-stack">
       <label>Email address<input name="email" type="email" autocomplete="username" required placeholder="you@yourshop.com"></label>
@@ -31,5 +41,6 @@
   </main>
   <script src="/js/api.js"></script>
   <script src="/js/login.js"></script>
+  <script src="/js/splash.js"></script>
 </body>
 </html>
