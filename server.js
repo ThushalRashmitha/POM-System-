@@ -41,7 +41,7 @@ app.use((req, res, next) => {
   const pagePath = req.path.toLowerCase();
   if (req.method !== 'GET' && req.method !== 'HEAD') return next();
   if (pagePath.startsWith('/api/') || pagePath === '/health') return next();
-  if (/^\/product\/[a-z0-9_-]{1,160}$/.test(pagePath)) return next();
+  if (/^\/product\/[a-z0-9_-]{1,160}(?:\/image)?$/.test(pagePath)) return next();
   if (publicPages.has(pagePath)) return next();
   const role = protectedPageRoles.get(pagePath);
   if (role) return requirePageRole(role)(req, res, next);
@@ -63,6 +63,35 @@ app.use(async (req, res, next) => {
 });
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
+app.get('/product/:id/image', async (req, res, next) => {
+  try {
+    if (!isValidProductId(req.params.id)) return res.status(404).send('Product image not found.');
+    const product = await Product.findById(req.params.id);
+    if (!product || !product.available) return res.status(404).send('Product image not found.');
+    const shop = await User.findById(product.shop);
+    if (!shop || shop.role !== 'shop' || shop.subscriptionStatus !== 'active' || !shop.marketplaceEnabled) {
+      return res.status(404).send('Product image not found.');
+    }
+
+    const match = typeof product.imageUrl === 'string'
+      ? /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/.exec(product.imageUrl)
+      : null;
+    if (!match) return res.status(404).send('Product image not found.');
+    const image = Buffer.from(match[2], 'base64');
+    if (!image.length || image.length > 2 * 1024 * 1024) {
+      return res.status(404).send('Product image not found.');
+    }
+
+    res.set({
+      'Cache-Control': 'public, max-age=3600',
+      'Content-Length': image.length,
+      'X-Content-Type-Options': 'nosniff'
+    });
+    res.type(`image/${match[1]}`).send(image);
+  } catch (error) {
+    next(error);
+  }
+});
 app.get('/product/:id', async (req, res, next) => {
   try {
     if (!isValidProductId(req.params.id)) return res.status(404).send('Product not found.');
@@ -75,7 +104,7 @@ app.get('/product/:id', async (req, res, next) => {
 
     const origin = getPublicOrigin(req);
     const pageUrl = new URL(`/product/${encodeURIComponent(product._id)}`, origin).href;
-    const imageUrl = getPublicImageUrl(product.imageUrl, origin);
+    const imageUrl = getProductImageUrl(product, origin);
     const price = formatSharePrice(product.sellingPrice ?? product.price);
     const description = `${price} — ${product.description || 'Ask the shop for more information about this product.'}`;
     const title = `${product.name} | ${shop.businessName}`;
@@ -172,14 +201,18 @@ function getPublicOrigin(req) {
   return parsedOrigin.origin;
 }
 
-function getPublicImageUrl(imageUrl, origin) {
-  try {
-    if (typeof imageUrl === 'string' && imageUrl && !imageUrl.startsWith('data:')) {
+function getProductImageUrl(product, origin) {
+  const imageUrl = product.imageUrl;
+  if (typeof imageUrl === 'string' && imageUrl.startsWith('data:image/')) {
+    return new URL(`/product/${encodeURIComponent(product._id)}/image`, origin).href;
+  }
+  if (typeof imageUrl === 'string' && imageUrl) {
+    try {
       const parsedUrl = new URL(imageUrl, origin);
       if (['http:', 'https:'].includes(parsedUrl.protocol)) return parsedUrl.href;
+    } catch {
+      return new URL('/images/brand/logo.png', origin).href;
     }
-  } catch {
-    return new URL('/images/brand/logo.png', origin).href;
   }
   return new URL('/images/brand/logo.png', origin).href;
 }

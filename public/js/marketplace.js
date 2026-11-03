@@ -64,7 +64,7 @@
       const whatsapp = String(product.shop.whatsapp || '').replace(/[^\d]/g, '');
       const shareUrl = new URL(`/product/${encodeURIComponent(product._id)}`, window.location.origin).href;
       const shareDescription = `${POS.formatCurrency(product.price)}. ${product.description || 'Ask the shop for more information about this product.'}`;
-      const shareImage = absoluteImageUrl(product.imageUrl);
+      const shareImage = absoluteImageUrl(product.imageUrl, product._id);
       updateProductMetadata({
         title: `${product.name} | ${product.shop.businessName}`,
         description: shareDescription,
@@ -212,8 +212,11 @@
     document.querySelector(`meta[property="${property}"]`).content = content;
   }
 
-  function absoluteImageUrl(imageUrl) {
-    if (!imageUrl || imageUrl.startsWith('data:')) {
+  function absoluteImageUrl(imageUrl, productId) {
+    if (imageUrl?.startsWith('data:image/') && productId) {
+      return new URL(`/product/${encodeURIComponent(productId)}/image`, window.location.origin).href;
+    }
+    if (!imageUrl) {
       return new URL('/images/brand/logo.png', window.location.origin).href;
     }
     try {
