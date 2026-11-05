@@ -9,6 +9,7 @@
   const shopId = new URLSearchParams(window.location.search).get('shop');
   const defaultTitle = document.title;
   const defaultDescription = document.querySelector('meta[name="description"]').content;
+  let returnMarketplaceUrl = null;
   let searchTimer;
 
   function renderProducts(products) {
@@ -71,6 +72,8 @@
         image: shareImage,
         url: shareUrl
       });
+      if (!returnMarketplaceUrl) returnMarketplaceUrl = window.location.href;
+      window.history.replaceState(window.history.state, '', shareUrl);
       detail.innerHTML = `${image}<p class="detail-shop">SOLD BY ${POS.escapeHtml(product.shop.businessName)}</p>
         <h2>${POS.escapeHtml(product.name)}</h2><p class="detail-price">${POS.formatCurrency(product.price)}</p>
         <button class="button button-outline product-share" type="button" data-product-share="${POS.escapeHtml(shareUrl)}"><i class="fa-solid fa-share-nodes"></i> Share product</button>
@@ -86,7 +89,7 @@
             <label><input type="radio" name="orderType" value="pickup"> Store Pickup</label>
           </fieldset>
           <label class="delivery-address-field" id="delivery-address-field">Delivery address<textarea name="deliveryAddress" maxlength="500" required placeholder="Enter your delivery address"></textarea></label>
-          <button class="button button-primary button-full" type="submit"><i class="fa-brands fa-whatsapp"></i> Order via WhatsApp</button>
+          <button class="button button-primary button-full" type="submit" data-product-name="${POS.escapeHtml(product.name)}" data-product-price="${POS.escapeHtml(POS.formatCurrency(product.price))}" data-product-stock="${product.stock}" data-shop-name="${POS.escapeHtml(product.shop.businessName)}" data-shop-whatsapp="${POS.escapeHtml(whatsapp)}"><i class="fa-brands fa-whatsapp"></i> Order via WhatsApp</button>
           <small class="form-note">WhatsApp opens with your order details ready. Review and tap Send to contact the shop.</small>
         </form>` : '<p class="notice notice-info">This item cannot be ordered until it is back in stock.</p>'}`;
       dialog.showModal();
@@ -102,34 +105,7 @@
         });
         orderForm.addEventListener('submit', (event) => {
           event.preventDefault();
-          if (!whatsapp) {
-            POS.showNotice(message, 'This shop has not set a valid WhatsApp contact number yet.', 'error');
-            return;
-          }
-          const values = new FormData(orderForm);
-          const quantity = Number(values.get('quantity'));
-          if (!Number.isInteger(quantity) || quantity < 1 || quantity > product.stock) {
-            POS.showNotice(message, 'The requested quantity is not available in stock.', 'error');
-            dialog.close();
-            return;
-          }
-          const orderType = values.get('orderType');
-          const deliveryAddress = String(values.get('deliveryAddress') || '').trim();
-          if (orderType === 'delivery' && !deliveryAddress) {
-            POS.showNotice(message, 'Enter a delivery address or choose Store Pickup.', 'error');
-            return;
-          }
-          const orderMessage = [
-            `Hello ${product.shop.businessName}, I would like to order:`,
-            `Product: ${product.name}`,
-            `Quantity: ${quantity}`,
-            `Unit price: ${POS.formatCurrency(product.price)}`,
-            `Order type: ${orderType === 'delivery' ? 'Home Delivery' : 'Store Pickup'}`,
-            ...(orderType === 'delivery' ? [`Delivery address: ${deliveryAddress}`] : []),
-            `Customer: ${values.get('customerName')}`,
-            `Phone: ${values.get('customerPhone')}`
-          ].join('\n');
-          window.open(`https://wa.me/${whatsapp}?text=${encodeURIComponent(orderMessage)}`, '_blank', 'noopener,noreferrer');
+          sendWhatsAppOrder(event.submitter || orderForm.querySelector('[data-product-name]'));
         });
       }
     } catch (error) {
@@ -179,6 +155,10 @@
     if (event.target === dialog) dialog.close();
   });
   dialog.addEventListener('close', () => {
+    if (returnMarketplaceUrl) {
+      window.history.replaceState(window.history.state, '', returnMarketplaceUrl);
+      returnMarketplaceUrl = null;
+    }
     document.title = defaultTitle;
     updateProductMetadata({
       title: defaultTitle,
@@ -197,6 +177,44 @@
     imageLightboxPhoto.src = image.src;
     imageLightboxPhoto.alt = image.alt;
     imageLightbox.showModal();
+  }
+
+  function sendWhatsAppOrder(buttonElement) {
+    const orderForm = buttonElement?.closest('form');
+    if (!orderForm) return;
+    const whatsapp = buttonElement.dataset.shopWhatsapp;
+    if (!whatsapp) {
+      POS.showNotice(message, 'This shop has not set a valid WhatsApp contact number yet.', 'error');
+      return;
+    }
+
+    const values = new FormData(orderForm);
+    const quantity = Number(values.get('quantity'));
+    const stock = Number(buttonElement.dataset.productStock);
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > stock) {
+      POS.showNotice(message, 'The requested quantity is not available in stock.', 'error');
+      return;
+    }
+
+    const orderType = values.get('orderType');
+    const deliveryAddress = String(values.get('deliveryAddress') || '').trim();
+    if (orderType === 'delivery' && !deliveryAddress) {
+      POS.showNotice(message, 'Enter a delivery address or choose Store Pickup.', 'error');
+      return;
+    }
+
+    const orderMessage = [
+      `Hello ${buttonElement.dataset.shopName}, I would like to order:`,
+      `Product: ${buttonElement.dataset.productName}`,
+      `Quantity: ${quantity}`,
+      `Unit price: ${buttonElement.dataset.productPrice}`,
+      `Order type: ${orderType === 'delivery' ? 'Home Delivery' : 'Store Pickup'}`,
+      ...(orderType === 'delivery' ? [`Delivery address: ${deliveryAddress}`] : []),
+      `Customer: ${values.get('customerName')}`,
+      `Phone: ${values.get('customerPhone')}`,
+      `Product link: ${window.location.href}`
+    ].join('\n');
+    window.open(`https://wa.me/${whatsapp}?text=${encodeURIComponent(orderMessage)}`, '_blank', 'noopener,noreferrer');
   }
 
   function updateProductMetadata({ title, description, image, url }) {
