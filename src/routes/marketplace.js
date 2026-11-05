@@ -12,9 +12,7 @@ router.get('/products', async (req, res, next) => {
     const search = String(req.query.search || '').trim().slice(0, 100).toLowerCase();
     const requestedShopId = typeof req.query.shop === 'string' ? req.query.shop : '';
     let shops;
-    if (req.user) {
-      shops = [req.user];
-    } else if (requestedShopId) {
+    if (requestedShopId) {
       if (!isValidShopId(requestedShopId)) {
         return res.status(400).json({ error: 'Invalid shop ID.' });
       }
@@ -32,13 +30,11 @@ router.get('/products', async (req, res, next) => {
       businessName: shop.businessName,
       whatsapp: shop.whatsapp
     }]));
-    const scopedShopId = req.user ? req.user.id : requestedShopId;
-    const availableProducts = scopedShopId
-      ? await Product.listAvailableByShop(scopedShopId)
+    const availableProducts = requestedShopId
+      ? await Product.listAvailableByShop(requestedShopId)
       : await Product.listAvailable();
     const products = availableProducts
       .filter((product) => shopById.has(product.shop) && (!search || product.name.toLowerCase().includes(search)))
-      .slice(0, 200)
       .map((product) => ({
         ...withoutCostPrice(product),
         shop: shopById.get(product.shop),
@@ -46,7 +42,7 @@ router.get('/products', async (req, res, next) => {
       }));
     res.json({
       products,
-      ...(requestedShopId && !req.user
+      ...(requestedShopId
         ? { shop: { id: shops[0].id, businessName: shops[0].businessName } }
         : {})
     });
@@ -62,9 +58,6 @@ router.get('/products/:id', async (req, res, next) => {
     if (!product || !product.available) {
       return res.status(404).json({ error: 'This product is not currently available.' });
     }
-    if (req.user && product.shop !== req.user.id) {
-      return res.status(404).json({ error: 'This product is not currently available.' });
-    }
     const requestedShopId = typeof req.query.shop === 'string' ? req.query.shop : '';
     if (requestedShopId && !isValidShopId(requestedShopId)) {
       return res.status(400).json({ error: 'Invalid shop ID.' });
@@ -73,8 +66,7 @@ router.get('/products/:id', async (req, res, next) => {
       return res.status(404).json({ error: 'This product is not currently available.' });
     }
     const shop = await User.findById(product.shop);
-    if (!isMarketplaceShop(shop)
-      || (!req.user && !shop.marketplaceEnabled)) {
+    if (!isMarketplaceShop(shop) || !shop.marketplaceEnabled) {
       return res.status(404).json({ error: 'This product is not currently available.' });
     }
     res.json({
