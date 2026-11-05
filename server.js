@@ -78,7 +78,7 @@ app.get('/product/:id/image', async (req, res, next) => {
       : null;
     if (!match) return res.status(404).send('Product image not found.');
     const image = Buffer.from(match[2], 'base64');
-    if (!image.length || image.length > 2 * 1024 * 1024) {
+    if (!image.length) {
       return res.status(404).send('Product image not found.');
     }
 

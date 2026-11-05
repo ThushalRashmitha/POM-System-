@@ -2,6 +2,7 @@ const express = require('express');
 const Product = require('../models/Product');
 const Invoice = require('../models/Invoice');
 const { requireRole, requireUser } = require('../middleware/auth');
+const { createProductImageUploadSignature, isOwnedProductImage } = require('../services/productImage');
 
 const router = express.Router();
 router.use(requireUser, requireRole('shop'));
@@ -28,9 +29,17 @@ router.get('/products', async (req, res, next) => {
   }
 });
 
+router.post('/product-images/signature', (req, res, next) => {
+  try {
+    res.json(createProductImageUploadSignature(req.user.id, req.body?.mimeType));
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.post('/products', async (req, res, next) => {
   try {
-    const { name, description = '', imageUrl = '' } = req.body;
+    const { name, description = '', imageUrl = '', imagePublicId = '' } = req.body;
     const productId = req.body.productId;
     const sellingPriceInput = req.body.sellingPrice ?? req.body.price;
     const costPriceInput = req.body.costPrice ?? 0;
@@ -51,7 +60,11 @@ router.post('/products', async (req, res, next) => {
       return res.status(400).json({ error: 'Product ID / Barcode can contain 1 to 160 letters, numbers, underscores, or hyphens.' });
     }
     if (typeof imageUrl !== 'string' || (imageUrl && !isValidProductImage(imageUrl))) {
-      return res.status(400).json({ error: 'Product image must be a valid HTTP or HTTPS URL or a PNG, JPG, or WebP image no larger than 2 MB.' });
+      return res.status(400).json({ error: 'Product image must be a valid HTTP or HTTPS URL.' });
+    }
+    if (typeof imagePublicId !== 'string'
+      || (imagePublicId && (!imageUrl || !isOwnedProductImage(imagePublicId, req.user.id)))) {
+      return res.status(400).json({ error: 'Product image is invalid.' });
     }
 
     const normalizedProductId = productId.trim();
@@ -64,6 +77,7 @@ router.post('/products', async (req, res, next) => {
       description: description.trim(),
       barcode: normalizedProductId,
       imageUrl,
+      imagePublicId,
       costPrice,
       sellingPrice,
       price: sellingPrice,
@@ -82,8 +96,15 @@ router.patch('/products/:id', async (req, res, next) => {
   try {
     if (!isValidDocumentId(req.params.id)) return res.status(400).json({ error: 'Invalid product ID.' });
     const updates = {};
-    for (const field of ['name', 'description', 'barcode', 'imageUrl', 'price', 'sellingPrice', 'costPrice', 'stock', 'available']) {
+    for (const field of ['name', 'description', 'barcode', 'imageUrl', 'imagePublicId', 'price', 'sellingPrice', 'costPrice', 'stock', 'available']) {
       if (Object.hasOwn(req.body, field)) updates[field] = req.body[field];
+    }
+    if (Object.hasOwn(updates, 'imagePublicId') && typeof updates.imagePublicId !== 'string') {
+      return res.status(400).json({ error: 'Product image is invalid.' });
+    }
+    if (updates.imagePublicId
+      && (!updates.imageUrl || !isOwnedProductImage(updates.imagePublicId, req.user.id))) {
+      return res.status(400).json({ error: 'Product image is invalid.' });
     }
     if (Object.hasOwn(updates, 'barcode')) {
       if (typeof updates.barcode !== 'string' || updates.barcode.length > 160) {
@@ -130,7 +151,7 @@ router.patch('/products/:id', async (req, res, next) => {
     if (Object.hasOwn(updates, 'description')) updates.description = updates.description.trim();
     if (Object.hasOwn(updates, 'imageUrl')
       && (typeof updates.imageUrl !== 'string' || (updates.imageUrl && !isValidProductImage(updates.imageUrl)))) {
-      return res.status(400).json({ error: 'Product image must be a valid HTTP or HTTPS URL or a PNG, JPG, or WebP image no larger than 2 MB.' });
+      return res.status(400).json({ error: 'Product image must be a valid HTTP or HTTPS URL.' });
     }
     if (Object.hasOwn(updates, 'available') && typeof updates.available !== 'boolean') {
       return res.status(400).json({ error: 'Marketplace availability must be true or false.' });
@@ -217,10 +238,7 @@ function isValidHttpUrl(value) {
 }
 
 function isValidProductImage(value) {
-  if (typeof value !== 'string') return false;
-  if (isValidHttpUrl(value)) return true;
-  const match = /^data:image\/(?:png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/.exec(value);
-  return Boolean(match && Buffer.from(match[1], 'base64').length <= 2 * 1024 * 1024);
+  return typeof value === 'string' && isValidHttpUrl(value);
 }
 
 function isValidDocumentId(id) {

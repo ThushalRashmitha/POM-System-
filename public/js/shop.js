@@ -14,6 +14,8 @@
   let cart = new Map();
   let editingProductId = null;
   let originalImageUrl = '';
+  let originalImagePublicId = '';
+  let previewObjectUrl = null;
   let toastTimer;
   let scannerBuffer = '';
   let scannerLastKeyAt = 0;
@@ -416,10 +418,10 @@
     const imageFile = values.get('imageFile');
     const wasEditing = Boolean(editingProductId);
     try {
-      const imageUrl = imageFile.size
-        ? await readProductImage(imageFile)
-        : (values.get('imageUrl') || (editingProductId && originalImageUrl.startsWith('data:image/')
-          ? originalImageUrl : ''));
+      const uploadedImage = imageFile.name ? await uploadProductImage(imageFile) : null;
+      const imageUrl = uploadedImage?.imageUrl
+        || values.get('imageUrl')
+        || (editingProductId && originalImageUrl.startsWith('data:image/') ? originalImageUrl : '');
       const payload = {
         name: values.get('name'), description: values.get('description'),
         productId: values.get('productId'),
@@ -427,8 +429,10 @@
         sellingPrice: values.get('sellingPrice'),
         stock: values.get('stock')
       };
-      if (!wasEditing || imageFile.size || values.get('imageUrl') || !originalImageUrl.startsWith('data:image/')) {
+      if (!wasEditing || uploadedImage || values.get('imageUrl') || !originalImageUrl.startsWith('data:image/')) {
         payload.imageUrl = imageUrl;
+        payload.imagePublicId = uploadedImage?.imagePublicId
+          || (imageUrl === originalImageUrl ? originalImagePublicId : '');
       }
       await POS.api(editingProductId ? `/shop/products/${editingProductId}` : '/shop/products', {
         method: editingProductId ? 'PATCH' : 'POST',
@@ -448,8 +452,8 @@
     const file = event.currentTarget.files[0];
     if (!file) return hideImagePreview();
     try {
-      const imageUrl = await readProductImage(file);
-      showImagePreview(imageUrl, file.name);
+      validateProductImage(file);
+      showImagePreview(URL.createObjectURL(file), file.name);
     } catch (error) {
       event.currentTarget.value = '';
       hideImagePreview();
@@ -482,6 +486,7 @@
         form.elements.namedItem('productId').readOnly = true;
         form.elements.namedItem('sellingPrice').value = productSellingPrice(product);
         originalImageUrl = product.imageUrl || '';
+        originalImagePublicId = product.imagePublicId || '';
         form.elements.namedItem('imageUrl').value = originalImageUrl.startsWith('data:image/') ? '' : originalImageUrl;
         if (product.imageUrl) showImagePreview(product.imageUrl, 'Current product image');
         else hideImagePreview();
@@ -547,6 +552,7 @@
   function resetProductEdit() {
     editingProductId = null;
     originalImageUrl = '';
+    originalImagePublicId = '';
     document.querySelector('[name="productId"]').readOnly = false;
     document.getElementById('product-form-title').textContent = 'Add a product';
     document.getElementById('product-save-button').textContent = 'Add product';
@@ -559,23 +565,39 @@
     resetProductEdit();
   });
 
-  function readProductImage(file) {
-    const allowedTypes = ['image/png', 'image/jpeg', 'image/webp'];
-    if (!allowedTypes.includes(file.type)) {
-      return Promise.reject(new Error('Choose a PNG, JPG, or WebP image.'));
-    }
-    if (file.size > 2 * 1024 * 1024) {
-      return Promise.reject(new Error('The image must be 2 MB or smaller.'));
-    }
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.addEventListener('load', () => resolve(reader.result));
-      reader.addEventListener('error', () => reject(new Error('Unable to read the selected image. Please try again.')));
-      reader.readAsDataURL(file);
+  async function uploadProductImage(file) {
+    validateProductImage(file);
+    const signature = await POS.api('/shop/product-images/signature', {
+      method: 'POST',
+      body: JSON.stringify({ mimeType: file.type })
     });
+    const body = new FormData();
+    body.append('file', file);
+    body.append('api_key', signature.apiKey);
+    body.append('timestamp', signature.timestamp);
+    body.append('folder', signature.folder);
+    body.append('public_id', signature.public_id);
+    body.append('signature', signature.signature);
+    const response = await fetch(`https://api.cloudinary.com/v1_1/${signature.cloudName}/image/upload`, {
+      method: 'POST',
+      body
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      throw new Error(result.error?.message || 'Unable to upload the selected image.');
+    }
+    return { imageUrl: result.secure_url, imagePublicId: result.public_id };
+  }
+
+  function validateProductImage(file) {
+    if (!file.type.startsWith('image/') || file.type === 'image/svg+xml') {
+      throw new Error('Choose a supported raster image.');
+    }
   }
 
   function showImagePreview(src, fileName) {
+    if (previewObjectUrl && previewObjectUrl !== src) URL.revokeObjectURL(previewObjectUrl);
+    previewObjectUrl = src.startsWith('blob:') ? src : null;
     const image = document.getElementById('product-image-preview');
     image.src = src;
     document.getElementById('product-image-file-name').textContent = fileName;
@@ -583,6 +605,8 @@
   }
 
   function hideImagePreview() {
+    if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
+    previewObjectUrl = null;
     document.getElementById('product-image-preview-wrap').classList.add('hidden');
     document.getElementById('product-image-preview').removeAttribute('src');
     document.getElementById('product-image-file-name').textContent = '';

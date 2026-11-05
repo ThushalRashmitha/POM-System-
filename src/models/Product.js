@@ -1,6 +1,6 @@
 const getDatabase = require('../config/database');
 const { deleteQueryInBatches } = require('./firestoreUtils');
-const { removeProductImage, saveProductImage } = require('../services/productImage');
+const { removeProductImage } = require('../services/productImage');
 
 const PRODUCTS = 'products';
 
@@ -47,9 +47,7 @@ async function findByBarcode(barcode, shopId) {
 async function createProduct(product, productId) {
   const ref = getDatabase().collection(PRODUCTS).doc(String(productId));
   const now = new Date().toISOString();
-  const image = product.imageUrl?.startsWith('data:image/')
-    ? await saveProductImage(product.shop, product.imageUrl)
-    : { imageUrl: product.imageUrl || '', imagePublicId: '' };
+  const image = { imageUrl: product.imageUrl || '', imagePublicId: product.imagePublicId || '' };
   const record = {
     ...product,
     ...image,
@@ -72,12 +70,12 @@ async function updateOwned(id, shopId, updates) {
   if (!snapshot.exists || snapshot.get('shop') !== String(shopId)) return null;
   const previousImagePublicId = snapshot.get('imagePublicId');
   const hasImageUpdate = Object.hasOwn(updates, 'imageUrl');
-  let imageUpdate = {};
+  const imageUpdate = hasImageUpdate
+    ? { imageUrl: updates.imageUrl || '', imagePublicId: updates.imagePublicId || '' }
+    : {};
   if (hasImageUpdate) {
-    imageUpdate = updates.imageUrl?.startsWith('data:image/')
-      ? await saveProductImage(shopId, updates.imageUrl)
-      : { imageUrl: updates.imageUrl || '', imagePublicId: '' };
     delete updates.imageUrl;
+    delete updates.imagePublicId;
   }
   await ref.update({ ...updates, ...imageUpdate, updatedAt: new Date().toISOString() });
   if (hasImageUpdate && previousImagePublicId && previousImagePublicId !== imageUpdate.imagePublicId) {
